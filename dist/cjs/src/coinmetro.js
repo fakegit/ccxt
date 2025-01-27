@@ -209,7 +209,75 @@ class coinmetro extends coinmetro$1 {
             // exchange-specific options
             'options': {
                 'currenciesByIdForParseMarket': undefined,
-                'currencyIdsListForParseMarket': undefined,
+                'currencyIdsListForParseMarket': ['QRDO'],
+            },
+            'features': {
+                'spot': {
+                    'sandbox': true,
+                    'createOrder': {
+                        'marginMode': true,
+                        'triggerPrice': true,
+                        'triggerPriceType': undefined,
+                        'triggerDirection': false,
+                        'stopLossPrice': false,
+                        'takeProfitPrice': false,
+                        'attachedStopLossTakeProfit': {
+                            'triggerPriceType': undefined,
+                            'price': false,
+                        },
+                        'timeInForce': {
+                            'IOC': true,
+                            'FOK': true,
+                            'PO': false,
+                            'GTD': true,
+                        },
+                        'hedged': false,
+                        'trailing': false,
+                        'leverage': false,
+                        'marketBuyByCost': true,
+                        'marketBuyRequiresPrice': false,
+                        'selfTradePrevention': false,
+                        'iceberg': true,
+                    },
+                    'createOrders': undefined,
+                    'fetchMyTrades': {
+                        'marginMode': false,
+                        'limit': undefined,
+                        'daysBack': 100000,
+                        'untilDays': undefined,
+                    },
+                    'fetchOrder': {
+                        'marginMode': false,
+                        'trigger': false,
+                        'trailing': false,
+                    },
+                    'fetchOpenOrders': {
+                        'marginMode': false,
+                        'limit': undefined,
+                        'trigger': false,
+                        'trailing': false,
+                    },
+                    'fetchOrders': {
+                        'marginMode': false,
+                        'limit': undefined,
+                        'daysBack': 100000,
+                        'untilDays': undefined,
+                        'trigger': false,
+                        'trailing': false,
+                    },
+                    'fetchClosedOrders': undefined,
+                    'fetchOHLCV': {
+                        'limit': 1000,
+                    },
+                },
+                'swap': {
+                    'linear': undefined,
+                    'inverse': undefined,
+                },
+                'future': {
+                    'linear': undefined,
+                    'inverse': undefined,
+                },
             },
             'exceptions': {
                 // https://trade-docs.coinmetro.co/?javascript--nodejs#message-codes
@@ -330,7 +398,12 @@ class coinmetro extends coinmetro$1 {
         if (this.safeValue(this.options, 'currenciesByIdForParseMarket') === undefined) {
             const currenciesById = this.indexBy(result, 'id');
             this.options['currenciesByIdForParseMarket'] = currenciesById;
-            this.options['currencyIdsListForParseMarket'] = Object.keys(currenciesById);
+            const currentCurrencyIdsList = this.safeList(this.options, 'currencyIdsListForParseMarket', []);
+            const currencyIdsList = Object.keys(currenciesById);
+            for (let i = 0; i < currencyIdsList.length; i++) {
+                currentCurrencyIdsList.push(currencyIdsList[i]);
+            }
+            this.options['currencyIdsListForParseMarket'] = currentCurrencyIdsList;
         }
         return result;
     }
@@ -431,10 +504,22 @@ class coinmetro extends coinmetro$1 {
         let baseId = undefined;
         let quoteId = undefined;
         const currencyIds = this.safeValue(this.options, 'currencyIdsListForParseMarket', []);
+        // Bubble sort by length (longest first)
+        const currencyIdsLength = currencyIds.length;
+        for (let i = 0; i < currencyIdsLength; i++) {
+            for (let j = 0; j < currencyIdsLength - i - 1; j++) {
+                const a = currencyIds[j];
+                const b = currencyIds[j + 1];
+                if (a.length < b.length) {
+                    currencyIds[j] = b;
+                    currencyIds[j + 1] = a;
+                }
+            }
+        }
         for (let i = 0; i < currencyIds.length; i++) {
             const currencyId = currencyIds[i];
             const entryIndex = marketId.indexOf(currencyId);
-            if (entryIndex !== -1) {
+            if (entryIndex === 0) {
                 const restId = marketId.replace(currencyId, '');
                 if (this.inArray(restId, currencyIds)) {
                     if (entryIndex === 0) {
@@ -1361,7 +1446,7 @@ class coinmetro extends coinmetro$1 {
     }
     /**
      * @method
-     * @name coinmetro#cancelOrder
+     * @name coinmetro#closePosition
      * @description closes an open position
      * @see https://documenter.getpostman.com/view/3653795/SVfWN6KS#47f913fb-8cab-49f4-bc78-d980e6ced316
      * @param {string} symbol not used by coinmetro closePosition ()

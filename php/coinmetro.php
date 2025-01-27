@@ -207,7 +207,75 @@ class coinmetro extends Exchange {
             // exchange-specific options
             'options' => array(
                 'currenciesByIdForParseMarket' => null,
-                'currencyIdsListForParseMarket' => null,
+                'currencyIdsListForParseMarket' => array( 'QRDO' ),
+            ),
+            'features' => array(
+                'spot' => array(
+                    'sandbox' => true,
+                    'createOrder' => array(
+                        'marginMode' => true, // todo implement
+                        'triggerPrice' => true,
+                        'triggerPriceType' => null,
+                        'triggerDirection' => false,
+                        'stopLossPrice' => false, // todo
+                        'takeProfitPrice' => false, // todo
+                        'attachedStopLossTakeProfit' => array(
+                            'triggerPriceType' => null,
+                            'price' => false,
+                        ),
+                        'timeInForce' => array(
+                            'IOC' => true,
+                            'FOK' => true,
+                            'PO' => false,
+                            'GTD' => true,
+                        ),
+                        'hedged' => false,
+                        'trailing' => false,
+                        'leverage' => false,
+                        'marketBuyByCost' => true,
+                        'marketBuyRequiresPrice' => false,
+                        'selfTradePrevention' => false,
+                        'iceberg' => true,
+                    ),
+                    'createOrders' => null,
+                    'fetchMyTrades' => array(
+                        'marginMode' => false,
+                        'limit' => null,
+                        'daysBack' => 100000,
+                        'untilDays' => null,
+                    ),
+                    'fetchOrder' => array(
+                        'marginMode' => false,
+                        'trigger' => false,
+                        'trailing' => false,
+                    ),
+                    'fetchOpenOrders' => array(
+                        'marginMode' => false,
+                        'limit' => null,
+                        'trigger' => false,
+                        'trailing' => false,
+                    ),
+                    'fetchOrders' => array(
+                        'marginMode' => false,
+                        'limit' => null,
+                        'daysBack' => 100000,
+                        'untilDays' => null,
+                        'trigger' => false,
+                        'trailing' => false,
+                    ),
+                    'fetchClosedOrders' => null,
+                    'fetchOHLCV' => array(
+                        'limit' => 1000,
+                    ),
+                ),
+                'swap' => array(
+                    'linear' => null,
+                    'inverse' => null,
+                ),
+                'future' => array(
+                    'linear' => null,
+                    'inverse' => null,
+                ),
             ),
             'exceptions' => array(
                 // https://trade-docs.coinmetro.co/?javascript--nodejs#message-codes
@@ -329,7 +397,12 @@ class coinmetro extends Exchange {
         if ($this->safe_value($this->options, 'currenciesByIdForParseMarket') === null) {
             $currenciesById = $this->index_by($result, 'id');
             $this->options['currenciesByIdForParseMarket'] = $currenciesById;
-            $this->options['currencyIdsListForParseMarket'] = is_array($currenciesById) ? array_keys($currenciesById) : array();
+            $currentCurrencyIdsList = $this->safe_list($this->options, 'currencyIdsListForParseMarket', array());
+            $currencyIdsList = is_array($currenciesById) ? array_keys($currenciesById) : array();
+            for ($i = 0; $i < count($currencyIdsList); $i++) {
+                $currentCurrencyIdsList[] = $currencyIdsList[$i];
+            }
+            $this->options['currencyIdsListForParseMarket'] = $currentCurrencyIdsList;
         }
         return $result;
     }
@@ -433,10 +506,22 @@ class coinmetro extends Exchange {
         $baseId = null;
         $quoteId = null;
         $currencyIds = $this->safe_value($this->options, 'currencyIdsListForParseMarket', array());
+        // Bubble sort by length (longest first)
+        $currencyIdsLength = count($currencyIds);
+        for ($i = 0; $i < $currencyIdsLength; $i++) {
+            for ($j = 0; $j < $currencyIdsLength - $i - 1; $j++) {
+                $a = $currencyIds[$j];
+                $b = $currencyIds[$j + 1];
+                if (strlen($a) < strlen($b)) {
+                    $currencyIds[$j] = $b;
+                    $currencyIds[$j + 1] = $a;
+                }
+            }
+        }
         for ($i = 0; $i < count($currencyIds); $i++) {
             $currencyId = $currencyIds[$i];
             $entryIndex = mb_strpos($marketId, $currencyId);
-            if ($entryIndex !== -1) {
+            if ($entryIndex === 0) {
                 $restId = str_replace($currencyId, '', $marketId);
                 if ($this->in_array($restId, $currencyIds)) {
                     if ($entryIndex === 0) {

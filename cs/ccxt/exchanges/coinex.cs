@@ -450,7 +450,7 @@ public partial class coinex : Exchange
                     { "ERC20", "ERC20" },
                     { "BRC20", "BRC20" },
                     { "SOL", "SOL" },
-                    { "TON", "SOL" },
+                    { "TON", "TON" },
                     { "BSV", "BSV" },
                     { "AVAXC", "AVA_C" },
                     { "AVAXX", "AVA" },
@@ -3020,7 +3020,7 @@ public partial class coinex : Exchange
             { "currency", this.safeCurrencyCode(null, currency) },
             { "network", null },
             { "address", address },
-            { "tag", tag },
+            { "tag", this.safeString(depositAddress, "memo", tag) },
         };
     }
 
@@ -3925,15 +3925,15 @@ public partial class coinex : Exchange
         this.checkAddress(address);
         await this.loadMarkets();
         object currency = this.currency(code);
-        if (isTrue(tag))
-        {
-            address = add(add(address, ":"), tag);
-        }
         object request = new Dictionary<string, object>() {
             { "ccy", getValue(currency, "id") },
             { "to_address", address },
             { "amount", this.numberToString(amount) },
         };
+        if (isTrue(!isEqual(tag, null)))
+        {
+            ((IDictionary<string,object>)request)["memo"] = tag;
+        }
         object networkCode = null;
         var networkCodeparametersVariable = this.handleNetworkCodeAndParams(parameters);
         networkCode = ((IList<object>)networkCodeparametersVariable)[0];
