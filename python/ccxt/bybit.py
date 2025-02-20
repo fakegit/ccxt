@@ -6,7 +6,7 @@
 from ccxt.base.exchange import Exchange
 from ccxt.abstract.bybit import ImplicitAPI
 import hashlib
-from ccxt.base.types import Balances, BorrowInterest, Conversion, CrossBorrowRate, Currencies, Currency, DepositAddress, Greeks, Int, LedgerEntry, Leverage, LeverageTier, LeverageTiers, LongShortRatio, Market, MarketInterface, Num, Option, OptionChain, Order, OrderBook, OrderRequest, CancellationRequest, OrderSide, OrderType, Position, Str, Strings, Ticker, Tickers, FundingRate, FundingRates, Trade, TradingFeeInterface, TradingFees, Transaction, TransferEntry
+from ccxt.base.types import Any, Balances, BorrowInterest, Conversion, CrossBorrowRate, Currencies, Currency, DepositAddress, Greeks, Int, LedgerEntry, Leverage, LeverageTier, LeverageTiers, LongShortRatio, Market, Num, Option, OptionChain, Order, OrderBook, OrderRequest, CancellationRequest, OrderSide, OrderType, Position, Str, Strings, Ticker, Tickers, FundingRate, FundingRates, Trade, TradingFeeInterface, TradingFees, Transaction, MarketInterface, TransferEntry
 from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
@@ -31,7 +31,7 @@ from ccxt.base.precise import Precise
 
 class bybit(Exchange, ImplicitAPI):
 
-    def describe(self):
+    def describe(self) -> Any:
         return self.deep_extend(super(bybit, self).describe(), {
             'id': 'bybit',
             'name': 'Bybit',
@@ -254,6 +254,7 @@ class bybit(Exchange, ImplicitAPI):
                         'v5/spot-lever-token/reference': 5,
                         # spot margin trade
                         'v5/spot-margin-trade/data': 5,
+                        'v5/spot-margin-trade/collateral': 5,
                         'v5/spot-cross-margin-trade/data': 5,
                         'v5/spot-cross-margin-trade/pledge-token': 5,
                         'v5/spot-cross-margin-trade/borrow-token': 5,
@@ -1210,17 +1211,20 @@ class bybit(Exchange, ImplicitAPI):
                         'limit': 100,
                         'daysBack': 365 * 2,  # 2 years
                         'untilDays': 7,  # days between start-end
+                        'symbolRequired': False,
                     },
                     'fetchOrder': {
                         'marginMode': False,
                         'trigger': True,
                         'trailing': False,
+                        'symbolRequired': True,
                     },
                     'fetchOpenOrders': {
                         'marginMode': False,
                         'limit': 50,
                         'trigger': True,
                         'trailing': False,
+                        'symbolRequired': False,
                     },
                     'fetchOrders': None,
                     'fetchClosedOrders': {
@@ -1231,6 +1235,7 @@ class bybit(Exchange, ImplicitAPI):
                         'untilDays': 7,
                         'trigger': True,
                         'trailing': False,
+                        'symbolRequired': False,
                     },
                     'fetchOHLCV': {
                         'limit': 1000,
@@ -1416,8 +1421,8 @@ class bybit(Exchange, ImplicitAPI):
 
     def create_expired_option_market(self, symbol: str):
         # support expired option contracts
-        quote = 'USD'
-        settle = 'USDC'
+        quote = None
+        settle = None
         optionParts = symbol.split('-')
         symbolBase = symbol.split('/')
         base = None
@@ -1425,9 +1430,20 @@ class bybit(Exchange, ImplicitAPI):
         if symbol.find('/') > -1:
             base = self.safe_string(symbolBase, 0)
             expiry = self.safe_string(optionParts, 1)
+            symbolQuoteAndSettle = self.safe_string(symbolBase, 1)
+            splitQuote = symbolQuoteAndSettle.split(':')
+            quoteAndSettle = self.safe_string(splitQuote, 0)
+            quote = quoteAndSettle
+            settle = quoteAndSettle
         else:
             base = self.safe_string(optionParts, 0)
             expiry = self.convert_market_id_expire_date(self.safe_string(optionParts, 1))
+            if symbol.endswith('-USDT'):
+                quote = 'USDT'
+                settle = 'USDT'
+            else:
+                quote = 'USDC'
+                settle = 'USDC'
         strike = self.safe_string(optionParts, 2)
         optionType = self.safe_string(optionParts, 3)
         datetime = self.convert_expire_date(expiry)
@@ -1516,6 +1532,8 @@ class bybit(Exchange, ImplicitAPI):
         return amountString
 
     def get_price(self, symbol: str, price: str):
+        if price is None:
+            return price
         market = self.market(symbol)
         emptyPrecisionPrice = (market['precision']['price'] is None)
         if not emptyPrecisionPrice:
@@ -1529,7 +1547,7 @@ class bybit(Exchange, ImplicitAPI):
             return self.cost_to_precision(symbol, cost)
         return cost
 
-    def fetch_time(self, params={}):
+    def fetch_time(self, params={}) -> Int:
         """
         fetches the current integer timestamp in milliseconds from the exchange server
 
@@ -1720,7 +1738,7 @@ class bybit(Exchange, ImplicitAPI):
         derivativeMarkets = self.array_concat(futureMarkets, optionMarkets)
         return self.array_concat(spotMarkets, derivativeMarkets)
 
-    def fetch_spot_markets(self, params):
+    def fetch_spot_markets(self, params) -> List[Market]:
         request: dict = {
             'category': 'spot',
         }
@@ -1835,7 +1853,7 @@ class bybit(Exchange, ImplicitAPI):
             }))
         return result
 
-    def fetch_future_markets(self, params):
+    def fetch_future_markets(self, params) -> List[Market]:
         params = self.extend(params)
         params['limit'] = 1000  # minimize number of requests
         preLaunchMarkets = []
@@ -2017,7 +2035,7 @@ class bybit(Exchange, ImplicitAPI):
             }))
         return result
 
-    def fetch_option_markets(self, params):
+    def fetch_option_markets(self, params) -> List[Market]:
         request: dict = {
             'category': 'option',
         }
@@ -3209,7 +3227,16 @@ class bybit(Exchange, ImplicitAPI):
                         if (loan is not None) and (interest is not None):
                             account['debt'] = Precise.string_add(loan, interest)
                         account['total'] = self.safe_string(coinEntry, 'walletBalance')
-                        account['free'] = self.safe_string_2(coinEntry, 'availableToWithdraw', 'free')
+                        free = self.safe_string_2(coinEntry, 'availableToWithdraw', 'free')
+                        if free is not None:
+                            account['free'] = free
+                        else:
+                            locked = self.safe_string(coinEntry, 'locked', '0')
+                            totalPositionIm = self.safe_string(coinEntry, 'totalPositionIM', '0')
+                            totalOrderIm = self.safe_string(coinEntry, 'totalOrderIM', '0')
+                            totalUsed = Precise.string_add(locked, totalPositionIm)
+                            totalUsed = Precise.string_add(totalUsed, totalOrderIm)
+                            account['used'] = totalUsed
                         # account['used'] = self.safe_string(coinEntry, 'locked')
                         currencyId = self.safe_string(coinEntry, 'coin')
                         code = self.safe_currency_code(currencyId)
@@ -3692,7 +3719,7 @@ class bybit(Exchange, ImplicitAPI):
         :param bool [params.reduceOnly]: True or False whether the order is reduce-only
         :param str [params.positionIdx]: *contracts only* 0 for one-way mode, 1 buy side of hedged mode, 2 sell side of hedged mode
         :param bool [params.hedged]: *contracts only* True for hedged mode, False for one way mode, default is False
-        :param boolean [params.isLeverage]: *unified spot only* False then spot trading True then margin trading
+        :param int [params.isLeverage]: *unified spot only* False then spot trading True then margin trading
         :param str [params.tpslMode]: *contract only* 'full' or 'partial'
         :param str [params.mmp]: *option only* market maker protection
         :param str [params.triggerDirection]: *contract only* the direction for trigger orders, 'above' or 'below'
@@ -3880,7 +3907,7 @@ class bybit(Exchange, ImplicitAPI):
                 elif price is not None:
                     request['qty'] = self.get_cost(symbol, Precise.string_mul(amountString, priceString))
                 else:
-                    request['qty'] = self.get_cost(symbol, self.number_to_string(amount))
+                    request['qty'] = amountString
         else:
             if not isTrailingAmountOrder and not isAlternativeEndpoint:
                 request['qty'] = amountString
@@ -6473,7 +6500,7 @@ classic accounts only/ spot not supported*  fetches information on an order made
         :returns: An array of open interest structures
         """
         if timeframe == '1m':
-            raise BadRequest(self.id + 'fetchOpenInterestHistory cannot use the 1m timeframe')
+            raise BadRequest(self.id + ' fetchOpenInterestHistory cannot use the 1m timeframe')
         self.load_markets()
         paginate = self.safe_bool(params, 'paginate')
         if paginate:
@@ -6498,10 +6525,13 @@ classic accounts only/ spot not supported*  fetches information on an order made
         #    }
         #
         timestamp = self.safe_integer(interest, 'timestamp')
-        value = self.safe_number_2(interest, 'open_interest', 'openInterest')
+        openInterest = self.safe_number_2(interest, 'open_interest', 'openInterest')
+        # the openInterest is in the base asset for linear and quote asset for inverse
+        amount = openInterest if market['linear'] else None
+        value = openInterest if market['inverse'] else None
         return self.safe_open_interest({
             'symbol': market['symbol'],
-            'openInterestAmount': None,
+            'openInterestAmount': amount,
             'openInterestValue': value,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
@@ -8689,6 +8719,8 @@ classic accounts only/ spot not supported*  fetches information on an order made
                 feedback = self.id + ' private api uses /user/v3/private/query-api to check if you have a unified account. The API key of user id must own one of permissions: "Account Transfer", "Subaccount Transfer", "Withdrawal" ' + body
             else:
                 feedback = self.id + ' ' + body
+            if body.find('Withdraw address chain or destination tag are not equal'):
+                feedback = feedback + '; You might also need to ensure the address is whitelisted'
             self.throw_broadly_matched_exception(self.exceptions['broad'], body, feedback)
             self.throw_exactly_matched_exception(self.exceptions['exact'], errorCode, feedback)
             raise ExchangeError(feedback)  # unknown message

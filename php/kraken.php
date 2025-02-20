@@ -10,7 +10,7 @@ use ccxt\abstract\kraken as Exchange;
 
 class kraken extends Exchange {
 
-    public function describe() {
+    public function describe(): mixed {
         return $this->deep_extend(parent::describe(), array(
             'id' => 'kraken',
             'name' => 'Kraken',
@@ -453,17 +453,20 @@ class kraken extends Exchange {
                         'limit' => null,
                         'daysBack' => null,
                         'untilDays' => null,
+                        'symbolRequired' => false,
                     ),
                     'fetchOrder' => array(
                         'marginMode' => false,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => false,
                     ),
                     'fetchOpenOrders' => array(
                         'marginMode' => false,
                         'limit' => null,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => false,
                     ),
                     'fetchOrders' => null,
                     'fetchClosedOrders' => array(
@@ -474,6 +477,7 @@ class kraken extends Exchange {
                         'untilDays' => 100000,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => false,
                     ),
                     'fetchOHLCV' => array(
                         'limit' => 720,
@@ -690,7 +694,7 @@ class kraken extends Exchange {
         if ($currencyId !== null) {
             if (strlen($currencyId) > 3) {
                 if ((mb_strpos($currencyId, 'X') === 0) || (mb_strpos($currencyId, 'Z') === 0)) {
-                    if (!(mb_strpos($currencyId, '.') > 0)) {
+                    if (!(mb_strpos($currencyId, '.') > 0) && ($currencyId !== 'ZEUS')) {
                         $currencyId = mb_substr($currencyId, 1);
                     }
                 }
@@ -978,9 +982,9 @@ class kraken extends Exchange {
             'high' => $this->safe_string($high, 1),
             'low' => $this->safe_string($low, 1),
             'bid' => $this->safe_string($bid, 0),
-            'bidVolume' => null,
+            'bidVolume' => $this->safe_string($bid, 2),
             'ask' => $this->safe_string($ask, 0),
-            'askVolume' => null,
+            'askVolume' => $this->safe_string($ask, 2),
             'vwap' => $vwap,
             'open' => $this->safe_string($ticker, 'o'),
             'close' => $last,
@@ -1528,10 +1532,8 @@ class kraken extends Exchange {
          */
         $this->load_markets();
         // only buy orders are supported by the endpoint
-        $req = array(
-            'cost' => $cost,
-        );
-        return $this->create_order($symbol, 'market', $side, 1, null, $this->extend($req, $params));
+        $params['cost'] = $cost;
+        return $this->create_order($symbol, 'market', $side, $cost, null, $params);
     }
 
     public function create_market_buy_order_with_cost(string $symbol, float $cost, $params = array ()) {
@@ -2488,7 +2490,7 @@ class kraken extends Exchange {
          * @return {array} the api result
          */
         if ($timeout > 86400000) {
-            throw new BadRequest($this->id . 'cancelAllOrdersAfter $timeout should be less than 86400000 milliseconds');
+            throw new BadRequest($this->id . ' cancelAllOrdersAfter $timeout should be less than 86400000 milliseconds');
         }
         $this->load_markets();
         $request = array(
@@ -2864,7 +2866,7 @@ class kraken extends Exchange {
         return $this->parse_transactions_by_type('deposit', $response['result'], $code, $since, $limit);
     }
 
-    public function fetch_time($params = array ()) {
+    public function fetch_time($params = array ()): ?int {
         /**
          * fetches the current integer timestamp in milliseconds from the exchange server
          *

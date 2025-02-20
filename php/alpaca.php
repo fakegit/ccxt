@@ -10,7 +10,7 @@ use ccxt\abstract\alpaca as Exchange;
 
 class alpaca extends Exchange {
 
-    public function describe() {
+    public function describe(): mixed {
         return $this->deep_extend(parent::describe(), array(
             'id' => 'alpaca',
             'name' => 'Alpaca',
@@ -48,6 +48,9 @@ class alpaca extends Exchange {
                 'cancelOrder' => true,
                 'closeAllPositions' => false,
                 'closePosition' => false,
+                'createMarketBuyOrder' => true,
+                'createMarketBuyOrderWithCost' => true,
+                'createMarketOrderWithCost' => true,
                 'createOrder' => true,
                 'createStopOrder' => true,
                 'createTriggerOrder' => true,
@@ -300,17 +303,20 @@ class alpaca extends Exchange {
                         'limit' => 100,
                         'daysBack' => 100000,
                         'untilDays' => 100000,
+                        'symbolRequired' => false,
                     ),
                     'fetchOrder' => array(
                         'marginMode' => false,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => false,
                     ),
                     'fetchOpenOrders' => array(
                         'marginMode' => false,
                         'limit' => 500,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => false,
                     ),
                     'fetchOrders' => array(
                         'marginMode' => false,
@@ -319,6 +325,7 @@ class alpaca extends Exchange {
                         'untilDays' => 100000,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => false,
                     ),
                     'fetchClosedOrders' => array(
                         'marginMode' => false,
@@ -328,6 +335,7 @@ class alpaca extends Exchange {
                         'untilDays' => 100000,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => false,
                     ),
                     'fetchOHLCV' => array(
                         'limit' => 1000,
@@ -359,7 +367,7 @@ class alpaca extends Exchange {
         ));
     }
 
-    public function fetch_time($params = array ()) {
+    public function fetch_time($params = array ()): ?int {
         /**
          * fetches the current integer $timestamp in milliseconds from the exchange server
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
@@ -433,7 +441,7 @@ class alpaca extends Exchange {
         //         "status" => "active",
         //         "tradable" => true,
         //         "marginable" => false,
-        //         "maintenance_margin_requirement" => 100,
+        //         "maintenance_margin_requirement" => 101,
         //         "shortable" => false,
         //         "easy_to_borrow" => false,
         //         "fractionable" => true,
@@ -913,6 +921,61 @@ class alpaca extends Exchange {
         return $clientOrderId;
     }
 
+    public function create_market_order_with_cost(string $symbol, string $side, float $cost, $params = array ()) {
+        /**
+         * create a market order by providing the $symbol, $side and $cost
+         *
+         * @see https://docs.alpaca.markets/reference/postorder
+         *
+         * @param {string} $symbol unified $symbol of the market to create an order in
+         * @param {string} $side 'buy' or 'sell'
+         * @param {float} $cost how much you want to trade in units of the quote currency
+         * @param {array} [$params] extra parameters specific to the exchange API endpoint
+         * @return {array} an ~@link https://docs.ccxt.com/#/?id=order-structure order structure~
+         */
+        $this->load_markets();
+        $req = array(
+            'cost' => $cost,
+        );
+        return $this->create_order($symbol, 'market', $side, 0, null, $this->extend($req, $params));
+    }
+
+    public function create_market_buy_order_with_cost(string $symbol, float $cost, $params = array ()) {
+        /**
+         * create a market buy order by providing the $symbol and $cost
+         *
+         * @see https://docs.alpaca.markets/reference/postorder
+         *
+         * @param {string} $symbol unified $symbol of the market to create an order in
+         * @param {float} $cost how much you want to trade in units of the quote currency
+         * @param {array} [$params] extra parameters specific to the exchange API endpoint
+         * @return {array} an ~@link https://docs.ccxt.com/#/?id=order-structure order structure~
+         */
+        $this->load_markets();
+        $req = array(
+            'cost' => $cost,
+        );
+        return $this->create_order($symbol, 'market', 'buy', 0, null, $this->extend($req, $params));
+    }
+
+    public function create_market_sell_order_with_cost(string $symbol, float $cost, $params = array ()) {
+        /**
+         * create a market sell order by providing the $symbol and $cost
+         *
+         * @see https://docs.alpaca.markets/reference/postorder
+         *
+         * @param {string} $symbol unified $symbol of the market to create an order in
+         * @param {float} $cost how much you want to trade in units of the quote currency
+         * @param {array} [$params] extra parameters specific to the exchange API endpoint
+         * @return {array} an ~@link https://docs.ccxt.com/#/?id=order-structure order structure~
+         */
+        $this->load_markets();
+        $req = array(
+            'cost' => $cost,
+        );
+        return $this->create_order($symbol, 'market', 'sell', $cost, null, $this->extend($req, $params));
+    }
+
     public function create_order(string $symbol, string $type, string $side, float $amount, ?float $price = null, $params = array ()) {
         /**
          * create a trade $order
@@ -926,6 +989,7 @@ class alpaca extends Exchange {
          * @param {float} [$price] the $price at which the $order is to be fulfilled, in units of the quote currency, ignored in $market orders
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
          * @param {float} [$params->triggerPrice] The $price at which a trigger $order is triggered at
+         * @param {float} [$params->cost] *$market orders only* the $cost of the $order in units of the quote currency
          * @return {array} an ~@link https://docs.ccxt.com/#/?$id=$order-structure $order structure~
          */
         $this->load_markets();
@@ -933,13 +997,11 @@ class alpaca extends Exchange {
         $id = $market['id'];
         $request = array(
             'symbol' => $id,
-            'qty' => $this->amount_to_precision($symbol, $amount),
             'side' => $side,
             'type' => $type, // $market, limit, stop_limit
         );
         $triggerPrice = $this->safe_string_n($params, array( 'triggerPrice', 'stop_price' ));
         if ($triggerPrice !== null) {
-            $newType = null;
             if (mb_strpos($type, 'limit') !== false) {
                 $newType = 'stop_limit';
             } else {
@@ -950,6 +1012,13 @@ class alpaca extends Exchange {
         }
         if (mb_strpos($type, 'limit') !== false) {
             $request['limit_price'] = $this->price_to_precision($symbol, $price);
+        }
+        $cost = $this->safe_string($params, 'cost');
+        if ($cost !== null) {
+            $params = $this->omit($params, 'cost');
+            $request['notional'] = $this->cost_to_precision($symbol, $cost);
+        } else {
+            $request['qty'] = $this->amount_to_precision($symbol, $amount);
         }
         $defaultTIF = $this->safe_string($this->options, 'defaultTimeInForce');
         $request['time_in_force'] = $this->safe_string($params, 'timeInForce', $defaultTIF);
@@ -1089,10 +1158,10 @@ class alpaca extends Exchange {
         $until = $this->safe_integer($params, 'until');
         if ($until !== null) {
             $params = $this->omit($params, 'until');
-            $request['endTime'] = $until;
+            $request['endTime'] = $this->iso8601($until);
         }
         if ($since !== null) {
-            $request['after'] = $since;
+            $request['after'] = $this->iso8601($since);
         }
         if ($limit !== null) {
             $request['limit'] = $limit;
@@ -1343,6 +1412,7 @@ class alpaca extends Exchange {
          * @param {int} [$limit] the maximum number of trade structures to retrieve
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
          * @param {int} [$params->until] the latest time in ms to fetch trades for
+         * @param {string} [$params->page_token] page_token - used for paging
          * @return {Trade[]} a list of ~@link https://docs.ccxt.com/#/?id=trade-structure trade structures~
          */
         $this->load_markets();
@@ -1353,8 +1423,13 @@ class alpaca extends Exchange {
         if ($symbol !== null) {
             $market = $this->market($symbol);
         }
+        $until = $this->safe_integer($params, 'until');
+        if ($until !== null) {
+            $params = $this->omit($params, 'until');
+            $request['until'] = $this->iso8601($until);
+        }
         if ($since !== null) {
-            $request['after'] = $since;
+            $request['after'] = $this->iso8601($since);
         }
         if ($limit !== null) {
             $request['page_size'] = $limit;

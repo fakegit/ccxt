@@ -5,11 +5,12 @@
 
 from ccxt.async_support.okx import okx
 from ccxt.abstract.myokx import ImplicitAPI
+from ccxt.base.types import Any
 
 
 class myokx(okx, ImplicitAPI):
 
-    def describe(self):
+    def describe(self) -> Any:
         return self.deep_extend(super(myokx, self).describe(), {
             'id': 'myokx',
             'name': 'MyOKX(EEA)',
@@ -39,5 +40,15 @@ class myokx(okx, ImplicitAPI):
                 'swap': False,
                 'future': False,
                 'option': False,
+            },
+            'features': {
+                'swap': {
+                    'linear': None,
+                    'inverse': None,
+                },
+                'future': {
+                    'linear': None,
+                    'inverse': None,
+                },
             },
         })

@@ -10,7 +10,7 @@ use ccxt\abstract\bitbns as Exchange;
 
 class bitbns extends Exchange {
 
-    public function describe() {
+    public function describe(): mixed {
         return $this->deep_extend(parent::describe(), array(
             'id' => 'bitbns',
             'name' => 'Bitbns',
@@ -172,17 +172,20 @@ class bitbns extends Exchange {
                         'limit' => null,
                         'daysBack' => null,
                         'untilDays' => null,
+                        'symbolRequired' => true,
                     ),
                     'fetchOrder' => array(
                         'marginMode' => false,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => true,
                     ),
                     'fetchOpenOrders' => array(
                         'marginMode' => false,
                         'limit' => null,
                         'trigger' => true,
                         'trailing' => false,
+                        'symbolRequired' => true,
                     ),
                     'fetchOrders' => null,
                     'fetchClosedOrders' => null,

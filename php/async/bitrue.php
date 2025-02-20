@@ -14,13 +14,13 @@ use ccxt\InvalidOrder;
 use ccxt\NotSupported;
 use ccxt\DDoSProtection;
 use ccxt\Precise;
-use React\Async;
-use React\Promise;
-use React\Promise\PromiseInterface;
+use \React\Async;
+use \React\Promise;
+use \React\Promise\PromiseInterface;
 
 class bitrue extends Exchange {
 
-    public function describe() {
+    public function describe(): mixed {
         return $this->deep_extend(parent::describe(), array(
             'id' => 'bitrue',
             'name' => 'Bitrue',
@@ -477,17 +477,20 @@ class bitrue extends Exchange {
                         'limit' => 1000,
                         'daysBack' => 100000,
                         'untilDays' => 100000,
+                        'symbolRequired' => true,
                     ),
                     'fetchOrder' => array(
                         'marginMode' => false,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => true,
                     ),
                     'fetchOpenOrders' => array(
                         'marginMode' => false,
                         'limit' => null,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => true,
                     ),
                     'fetchOrders' => null,
                     'fetchClosedOrders' => array(
@@ -498,6 +501,7 @@ class bitrue extends Exchange {
                         'untilDays' => 90,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => true,
                     ),
                     'fetchOHLCV' => array(
                         'limit' => 1440,
@@ -644,7 +648,7 @@ class bitrue extends Exchange {
         }) ();
     }
 
-    public function fetch_time($params = array ()) {
+    public function fetch_time($params = array ()): PromiseInterface {
         return Async\async(function () use ($params) {
             /**
              * fetches the current integer timestamp in milliseconds from the exchange server

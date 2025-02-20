@@ -15,7 +15,7 @@ import type { Int, OrderSide, OrderType, Trade, OHLCV, Order, FundingRateHistory
  * @augments Exchange
  */
 export default class blofin extends Exchange {
-    describe () {
+    describe (): any {
         return this.deepExtend (super.describe (), {
             'id': 'blofin',
             'name': 'BloFin',
@@ -159,6 +159,9 @@ export default class blofin extends Exchange {
                 'api': {
                     'rest': 'https://openapi.blofin.com',
                 },
+                'test': {
+                    'rest': 'https://demo-trading-openapi.blofin.com',
+                },
                 'referral': {
                     'url': 'https://blofin.com/register?referral_code=f79EsS',
                     'discount': 0.05,
@@ -269,6 +272,7 @@ export default class blofin extends Exchange {
                         'limit': 100,
                         'daysBack': 100000,
                         'untilDays': 100000,
+                        'symbolRequired': false,
                     },
                     'fetchOrder': undefined,
                     'fetchOpenOrders': {
@@ -276,6 +280,7 @@ export default class blofin extends Exchange {
                         'limit': 100,
                         'trigger': true,
                         'trailing': false,
+                        'symbolRequired': false,
                     },
                     'fetchOrders': undefined,
                     'fetchClosedOrders': {
@@ -286,9 +291,10 @@ export default class blofin extends Exchange {
                         'untilDays': 100000,
                         'trigger': true,
                         'trailing': false,
+                        'symbolRequired': false,
                     },
                     'fetchOHLCV': {
-                        'max': 1440,
+                        'limit': 1440,
                     },
                 },
                 'spot': {
@@ -315,7 +321,7 @@ export default class blofin extends Exchange {
                         'takeProfitPrice': true,
                         'attachedStopLossTakeProfit': {
                             'triggerPriceType': undefined,
-                            'limit': true,
+                            'price': true,
                         },
                         'hedged': true,
                     },
@@ -1986,7 +1992,7 @@ export default class blofin extends Exchange {
 
     /**
      * @method
-     * @name blofin#fetchPosition
+     * @name blofin#fetchPositions
      * @description fetch data on a single open contract trade position
      * @see https://blofin.com/docs#get-positions
      * @param {string[]} [symbols] list of unified market symbols

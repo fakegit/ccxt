@@ -14,12 +14,12 @@ use ccxt\InvalidOrder;
 use ccxt\NotSupported;
 use ccxt\DDoSProtection;
 use ccxt\Precise;
-use React\Async;
-use React\Promise\PromiseInterface;
+use \React\Async;
+use \React\Promise\PromiseInterface;
 
 class whitebit extends Exchange {
 
-    public function describe() {
+    public function describe(): mixed {
         return $this->deep_extend(parent::describe(), array(
             'id' => 'whitebit',
             'name' => 'WhiteBit',
@@ -265,6 +265,8 @@ class whitebit extends Exchange {
                 ),
             ),
             'options' => array(
+                'timeDifference' => 0, // the difference between system clock and exchange clock
+                'adjustForTimeDifference' => false, // controls the adjustment logic upon instantiation
                 'fiatCurrencies' => array( 'EUR', 'USD', 'RUB', 'UAH' ),
                 'fetchBalance' => array(
                     'account' => 'spot',
@@ -281,6 +283,78 @@ class whitebit extends Exchange {
                 ),
                 'defaultType' => 'spot',
                 'brokerId' => 'ccxt',
+            ),
+            'features' => array(
+                'default' => array(
+                    'sandbox' => false,
+                    'createOrder' => array(
+                        'marginMode' => true,
+                        'triggerPrice' => true,
+                        'triggerDirection' => false,
+                        'triggerPriceType' => null,
+                        'stopLossPrice' => false, // todo
+                        'takeProfitPrice' => false, // todo
+                        'attachedStopLossTakeProfit' => null,
+                        'timeInForce' => array(
+                            'IOC' => true, // todo
+                            'FOK' => false,
+                            'PO' => true, // todo
+                            'GTD' => false,
+                        ),
+                        'hedged' => false,
+                        'trailing' => false,
+                        'leverage' => false,
+                        'marketBuyByCost' => true,
+                        'marketBuyRequiresPrice' => false,
+                        'selfTradePrevention' => false,
+                        'iceberg' => false,
+                    ),
+                    'createOrders' => null,
+                    'fetchMyTrades' => array(
+                        'marginMode' => false,
+                        'limit' => 100,
+                        'daysBack' => null,
+                        'untilDays' => null,
+                        'symbolRequired' => false,
+                    ),
+                    'fetchOrder' => null,
+                    'fetchOpenOrders' => array(
+                        'marginMode' => false,
+                        'limit' => 100,
+                        'trigger' => false,
+                        'trailing' => false,
+                        'symbolRequired' => false,
+                    ),
+                    'fetchOrders' => null, // todo
+                    'fetchClosedOrders' => array(
+                        'marginMode' => false,
+                        'limit' => 100,
+                        'daysBack' => null,
+                        'daysBackCanceled' => null,
+                        'untilDays' => null,
+                        'trigger' => false,
+                        'trailing' => false,
+                        'symbolRequired' => false,
+                    ),
+                    'fetchOHLCV' => array(
+                        'limit' => 1440,
+                    ),
+                ),
+                'spot' => array(
+                    'extends' => 'default',
+                ),
+                'swap' => array(
+                    'linear' => array(
+                        'extends' => 'default',
+                    ),
+                    'inverse' => array(
+                        'extends' => 'default',
+                    ),
+                ),
+                'future' => array(
+                    'linear' => null,
+                    'inverse' => null,
+                ),
             ),
             'precisionMode' => TICK_SIZE,
             'exceptions' => array(
@@ -323,6 +397,9 @@ class whitebit extends Exchange {
              * @param {array} [$params] extra parameters specific to the exchange API endpoint
              * @return {array[]} an array of objects representing market data
              */
+            if ($this->options['adjustForTimeDifference']) {
+                Async\await($this->load_time_difference());
+            }
             $markets = Async\await($this->v4PublicGetMarkets ());
             //
             //    array(
@@ -1270,7 +1347,7 @@ class whitebit extends Exchange {
         }) ();
     }
 
-    public function fetch_time($params = array ()) {
+    public function fetch_time($params = array ()): PromiseInterface {
         return Async\async(function () use ($params) {
             /**
              * fetches the current integer timestamp in milliseconds from the exchange server
@@ -1283,7 +1360,7 @@ class whitebit extends Exchange {
             $response = Async\await($this->v4PublicGetTime ($params));
             //
             //     {
-            //         "time":1635467280514
+            //         "time":1737380046
             //     }
             //
             return $this->safe_integer($response, 'time');
@@ -1300,11 +1377,9 @@ class whitebit extends Exchange {
              * @param {array} [$params] extra parameters specific to the exchange API endpoint
              * @return {array} an ~@link https://docs.ccxt.com/#/?id=order-structure order structure~
              */
-            $req = array(
-                'cost' => $cost,
-            );
+            $params['cost'] = $cost;
             // only buy $side is supported
-            return Async\await($this->create_order($symbol, 'market', $side, 0, null, $this->extend($req, $params)));
+            return Async\await($this->create_order($symbol, 'market', $side, 0, null, $params));
         }) ();
     }
 
@@ -2702,7 +2777,7 @@ class whitebit extends Exchange {
     }
 
     public function nonce() {
-        return $this->milliseconds();
+        return $this->milliseconds() - $this->options['timeDifference'];
     }
 
     public function sign($path, $api = 'public', $method = 'GET', $params = array (), $headers = null, $body = null) {
@@ -2718,10 +2793,12 @@ class whitebit extends Exchange {
         }
         if ($accessibility === 'private') {
             $this->check_required_credentials();
-            $nonce = (string) $this->nonce();
+            $nonce = $this->nonce();
+            $timestamp = $this->parse_to_int($nonce / 1000);
+            $timestampString = (string) $timestamp;
             $secret = $this->encode($this->secret);
             $request = '/' . 'api' . '/' . $version . $pathWithParams;
-            $body = $this->json($this->extend(array( 'request' => $request, 'nonce' => $nonce ), $params));
+            $body = $this->json($this->extend(array( 'request' => $request, 'nonce' => $timestampString ), $params));
             $payload = base64_encode($body);
             $signature = $this->hmac($this->encode($payload), $secret, 'sha512');
             $headers = array(
@@ -2745,12 +2822,13 @@ class whitebit extends Exchange {
             // For cases where we have a meaningful $status
             // array("response":null,"status":422,"errors":array("orderId":["Finished order id 435453454535 not found on your account"]),"notification":null,"warning":"Finished order id 435453454535 not found on your account","_token":null)
             $status = $this->safe_string($response, 'status');
+            $errors = $this->safe_value($response, 'errors');
             // array("code":10,"message":"Unauthorized request.")
             $message = $this->safe_string($response, 'message');
             // For these cases where we have a generic $code variable error key
             // array("code":0,"message":"Validation failed","errors":array("amount":["Amount must be greater than 0"]))
             $codeNew = $this->safe_integer($response, 'code');
-            $hasErrorStatus = $status !== null && $status !== '200';
+            $hasErrorStatus = $status !== null && $status !== '200' && $errors !== null;
             if ($hasErrorStatus || $codeNew !== null) {
                 $feedback = $this->id . ' ' . $body;
                 $errorInfo = $message;

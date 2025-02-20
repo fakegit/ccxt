@@ -11,7 +11,7 @@ import Client from '../base/ws/Client.js';
 //  ---------------------------------------------------------------------------
 
 export default class coinex extends coinexRest {
-    describe () {
+    describe (): any {
         return this.deepExtend (super.describe (), {
             'has': {
                 'ws': true,
@@ -261,7 +261,10 @@ export default class coinex extends coinexRest {
         [ type, params ] = this.handleMarketTypeAndParams ('watchBalance', undefined, params, 'spot');
         await this.authenticate (type);
         const url = this.urls['api']['ws'][type];
-        let currencies = Object.keys (this.currencies_by_id);
+        // coinex throws a closes the websocket when subscribing over 1422 currencies, therefore we filter out inactive currencies
+        const activeCurrencies = this.filterBy (this.currencies_by_id, 'active', true);
+        const activeCurrenciesById = this.indexBy (activeCurrencies, 'id');
+        let currencies = Object.keys (activeCurrenciesById);
         if (currencies === undefined) {
             currencies = [];
         }

@@ -637,6 +637,8 @@ public partial class gate : Exchange
                 { "X-Gate-Channel-Id", "ccxt" },
             } },
             { "options", new Dictionary<string, object>() {
+                { "timeDifference", 0 },
+                { "adjustForTimeDifference", false },
                 { "sandboxMode", false },
                 { "unifiedAccount", null },
                 { "createOrder", new Dictionary<string, object>() {
@@ -644,23 +646,59 @@ public partial class gate : Exchange
                 } },
                 { "createMarketBuyOrderRequiresPrice", true },
                 { "networks", new Dictionary<string, object>() {
-                    { "LINEA", "LINEAETH" },
-                    { "KON", "KONET" },
-                    { "AVAXC", "AVAX_C" },
-                    { "BEP20", "BSC" },
-                    { "EOS", "EOS" },
-                    { "ERC20", "ETH" },
-                    { "GATECHAIN", "GTEVM" },
-                    { "HRC20", "HT" },
-                    { "KUSAMA", "KSMSM" },
-                    { "NEAR", "NEAR" },
-                    { "OKC", "OKT" },
-                    { "OPTIMISM", "OPETH" },
-                    { "POLKADOT", "DOTSM" },
-                    { "TRC20", "TRX" },
-                    { "LUNA", "LUNC" },
-                    { "BASE", "BASEEVM" },
+                    { "BTC", "BTC" },
                     { "BRC20", "BTCBRC" },
+                    { "ETH", "ETH" },
+                    { "ERC20", "ETH" },
+                    { "TRX", "TRX" },
+                    { "TRC20", "TRX" },
+                    { "HECO", "HT" },
+                    { "HRC20", "HT" },
+                    { "BSC", "BSC" },
+                    { "BEP20", "BSC" },
+                    { "SOL", "SOL" },
+                    { "POLYGON", "POL" },
+                    { "MATIC", "POL" },
+                    { "OP", "OPETH" },
+                    { "OPTIMISM", "OPETH" },
+                    { "ADA", "ADA" },
+                    { "AVAXC", "AVAX_C" },
+                    { "NEAR", "NEAR" },
+                    { "ARBONE", "ARBEVM" },
+                    { "BASE", "BASEEVM" },
+                    { "SUI", "SUI" },
+                    { "CRONOS", "CRO" },
+                    { "CRO", "CRO" },
+                    { "APT", "APT" },
+                    { "SCROLL", "SCROLLETH" },
+                    { "TAIKO", "TAIKOETH" },
+                    { "HYPE", "HYPE" },
+                    { "ALGO", "ALGO" },
+                    { "LINEA", "LINEAETH" },
+                    { "BLAST", "BLASTETH" },
+                    { "XLM", "XLM" },
+                    { "RSK", "RBTC" },
+                    { "TON", "TON" },
+                    { "MNT", "MNT" },
+                    { "CELO", "CELO" },
+                    { "HBAR", "HBAR" },
+                    { "ZKSERA", "ZKSERA" },
+                    { "KLAY", "KLAY" },
+                    { "EOS", "EOS" },
+                    { "ACA", "ACA" },
+                    { "XTZ", "XTZ" },
+                    { "EGLD", "EGLD" },
+                    { "GLMR", "GLMR" },
+                    { "AURORA", "AURORAEVM" },
+                    { "KON", "KONET" },
+                    { "GATECHAIN", "GTEVM" },
+                    { "KUSAMA", "KSMSM" },
+                    { "OKC", "OKT" },
+                    { "POLKADOT", "DOTSM" },
+                    { "LUNA", "LUNC" },
+                } },
+                { "networksById", new Dictionary<string, object>() {
+                    { "OPETH", "OP" },
                 } },
                 { "timeInForce", new Dictionary<string, object>() {
                     { "GTC", "gtc" },
@@ -727,17 +765,20 @@ public partial class gate : Exchange
                         { "limit", 1000 },
                         { "daysBack", null },
                         { "untilDays", 30 },
+                        { "symbolRequired", false },
                     } },
                     { "fetchOrder", new Dictionary<string, object>() {
                         { "marginMode", false },
                         { "trigger", true },
                         { "trailing", false },
+                        { "symbolRequired", true },
                     } },
                     { "fetchOpenOrders", new Dictionary<string, object>() {
                         { "marginMode", true },
                         { "trigger", true },
                         { "trailing", false },
                         { "limit", 100 },
+                        { "symbolRequired", false },
                     } },
                     { "fetchOrders", null },
                     { "fetchClosedOrders", new Dictionary<string, object>() {
@@ -748,6 +789,7 @@ public partial class gate : Exchange
                         { "untilDays", 30 },
                         { "daysBack", null },
                         { "daysBackCanceled", null },
+                        { "symbolRequired", false },
                     } },
                     { "fetchOHLCV", new Dictionary<string, object>() {
                         { "limit", 1000 },
@@ -1098,6 +1140,10 @@ public partial class gate : Exchange
     public async override Task<object> fetchMarkets(object parameters = null)
     {
         parameters ??= new Dictionary<string, object>();
+        if (isTrue(getValue(this.options, "adjustForTimeDifference")))
+        {
+            await this.loadTimeDifference();
+        }
         object sandboxMode = this.safeBool(this.options, "sandboxMode", false);
         object rawPromises = new List<object> {this.fetchContractMarkets(parameters), this.fetchOptionMarkets(parameters)};
         if (!isTrue(sandboxMode))
@@ -1820,7 +1866,7 @@ public partial class gate : Exchange
             if (isTrue(isEqual(this.safeValue(result, code), null)))
             {
                 ((IDictionary<string,object>)result)[(string)code] = new Dictionary<string, object>() {
-                    { "id", ((string)code).ToLower() },
+                    { "id", currency },
                     { "code", code },
                     { "info", null },
                     { "name", null },
@@ -3859,6 +3905,7 @@ public partial class gate : Exchange
         //
         // public
         //
+        //  spot:
         //     {
         //         "id": "1334253759",
         //         "create_time": "1626342738",
@@ -3868,6 +3915,18 @@ public partial class gate : Exchange
         //         "amount": "0.0022",
         //         "price": "32452.16"
         //     }
+        //
+        //  swap:
+        //
+        //    {
+        //        "id": "442288327",
+        //        "contract": "BTC_USDT",
+        //        "create_time": "1739814676.707",
+        //        "create_time_ms": "1739814676.707",
+        //        "size": "-105",
+        //        "price": "95594.8"
+        //    }
+        //
         //
         // public ws
         //
@@ -3945,8 +4004,17 @@ public partial class gate : Exchange
         //     }
         //
         object id = this.safeString2(trade, "id", "trade_id");
-        object timestamp = this.safeTimestamp2(trade, "time", "create_time");
-        timestamp = this.safeInteger(trade, "create_time_ms", timestamp);
+        object timestamp = null;
+        object msString = this.safeString(trade, "create_time_ms");
+        if (isTrue(!isEqual(msString, null)))
+        {
+            msString = Precise.stringMul(msString, "1000");
+            msString = slice(msString, 0, 13);
+            timestamp = this.parseToInt(msString);
+        } else
+        {
+            timestamp = this.safeTimestamp2(trade, "time", "create_time");
+        }
         object marketId = this.safeString2(trade, "currency_pair", "contract");
         object marketType = ((bool) isTrue((inOp(trade, "contract")))) ? "contract" : "spot";
         market = this.safeMarket(marketId, market, "_", marketType);
@@ -6936,7 +7004,7 @@ public partial class gate : Exchange
 
     /**
      * @method
-     * @name gate#borrowMargin
+     * @name gate#borrowIsolatedMargin
      * @description create a loan to borrow margin
      * @see https://www.gate.io/docs/developers/apiv4/en/#marginuni
      * @param {string} symbol unified market symbol, required for isolated margin
@@ -7167,6 +7235,11 @@ public partial class gate : Exchange
         };
     }
 
+    public override object nonce()
+    {
+        return subtract(this.milliseconds(), getValue(this.options, "timeDifference"));
+    }
+
     public override object sign(object path, object api = null, object method = null, object parameters = null, object headers = null, object body = null)
     {
         api ??= new List<object>();
@@ -7255,7 +7328,8 @@ public partial class gate : Exchange
             }
             object bodyPayload = ((bool) isTrue((isEqual(body, null)))) ? "" : body;
             object bodySignature = this.hash(this.encode(bodyPayload), sha512);
-            object timestamp = this.seconds();
+            object nonce = this.nonce();
+            object timestamp = this.parseToInt(divide(nonce, 1000));
             object timestampString = ((object)timestamp).ToString();
             object signaturePath = add(add("/api/", this.version), entirePath);
             object payloadArray = new List<object> {((string)method).ToUpper(), signaturePath, queryString, bodySignature, timestampString};

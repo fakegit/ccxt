@@ -6,7 +6,7 @@
 from ccxt.async_support.base.exchange import Exchange
 from ccxt.abstract.whitebit import ImplicitAPI
 import hashlib
-from ccxt.base.types import Balances, BorrowInterest, Bool, Currencies, Currency, DepositAddress, Int, Market, MarketType, Num, Order, OrderBook, OrderSide, OrderType, Str, Strings, Ticker, Tickers, FundingRate, FundingRates, Trade, TradingFees, Transaction, TransferEntry
+from ccxt.base.types import Any, Balances, BorrowInterest, Bool, Currencies, Currency, DepositAddress, Int, Market, MarketType, Num, Order, OrderBook, OrderSide, OrderType, Str, Strings, Ticker, Tickers, FundingRate, FundingRates, Trade, TradingFees, Transaction, TransferEntry
 from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
@@ -26,7 +26,7 @@ from ccxt.base.precise import Precise
 
 class whitebit(Exchange, ImplicitAPI):
 
-    def describe(self):
+    def describe(self) -> Any:
         return self.deep_extend(super(whitebit, self).describe(), {
             'id': 'whitebit',
             'name': 'WhiteBit',
@@ -272,6 +272,8 @@ class whitebit(Exchange, ImplicitAPI):
                 },
             },
             'options': {
+                'timeDifference': 0,  # the difference between system clock and exchange clock
+                'adjustForTimeDifference': False,  # controls the adjustment logic upon instantiation
                 'fiatCurrencies': ['EUR', 'USD', 'RUB', 'UAH'],
                 'fetchBalance': {
                     'account': 'spot',
@@ -288,6 +290,78 @@ class whitebit(Exchange, ImplicitAPI):
                 },
                 'defaultType': 'spot',
                 'brokerId': 'ccxt',
+            },
+            'features': {
+                'default': {
+                    'sandbox': False,
+                    'createOrder': {
+                        'marginMode': True,
+                        'triggerPrice': True,
+                        'triggerDirection': False,
+                        'triggerPriceType': None,
+                        'stopLossPrice': False,  # todo
+                        'takeProfitPrice': False,  # todo
+                        'attachedStopLossTakeProfit': None,
+                        'timeInForce': {
+                            'IOC': True,  # todo
+                            'FOK': False,
+                            'PO': True,  # todo
+                            'GTD': False,
+                        },
+                        'hedged': False,
+                        'trailing': False,
+                        'leverage': False,
+                        'marketBuyByCost': True,
+                        'marketBuyRequiresPrice': False,
+                        'selfTradePrevention': False,
+                        'iceberg': False,
+                    },
+                    'createOrders': None,
+                    'fetchMyTrades': {
+                        'marginMode': False,
+                        'limit': 100,
+                        'daysBack': None,
+                        'untilDays': None,
+                        'symbolRequired': False,
+                    },
+                    'fetchOrder': None,
+                    'fetchOpenOrders': {
+                        'marginMode': False,
+                        'limit': 100,
+                        'trigger': False,
+                        'trailing': False,
+                        'symbolRequired': False,
+                    },
+                    'fetchOrders': None,  # todo
+                    'fetchClosedOrders': {
+                        'marginMode': False,
+                        'limit': 100,
+                        'daysBack': None,
+                        'daysBackCanceled': None,
+                        'untilDays': None,
+                        'trigger': False,
+                        'trailing': False,
+                        'symbolRequired': False,
+                    },
+                    'fetchOHLCV': {
+                        'limit': 1440,
+                    },
+                },
+                'spot': {
+                    'extends': 'default',
+                },
+                'swap': {
+                    'linear': {
+                        'extends': 'default',
+                    },
+                    'inverse': {
+                        'extends': 'default',
+                    },
+                },
+                'future': {
+                    'linear': None,
+                    'inverse': None,
+                },
             },
             'precisionMode': TICK_SIZE,
             'exceptions': {
@@ -328,6 +402,8 @@ class whitebit(Exchange, ImplicitAPI):
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict[]: an array of objects representing market data
         """
+        if self.options['adjustForTimeDifference']:
+            await self.load_time_difference()
         markets = await self.v4PublicGetMarkets()
         #
         #    [
@@ -1215,7 +1291,7 @@ class whitebit(Exchange, ImplicitAPI):
             'info': response,
         }
 
-    async def fetch_time(self, params={}):
+    async def fetch_time(self, params={}) -> Int:
         """
         fetches the current integer timestamp in milliseconds from the exchange server
 
@@ -1227,7 +1303,7 @@ class whitebit(Exchange, ImplicitAPI):
         response = await self.v4PublicGetTime(params)
         #
         #     {
-        #         "time":1635467280514
+        #         "time":1737380046
         #     }
         #
         return self.safe_integer(response, 'time')
@@ -1241,11 +1317,9 @@ class whitebit(Exchange, ImplicitAPI):
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: an `order structure <https://docs.ccxt.com/#/?id=order-structure>`
         """
-        req = {
-            'cost': cost,
-        }
+        params['cost'] = cost
         # only buy side is supported
-        return await self.create_order(symbol, 'market', side, 0, None, self.extend(req, params))
+        return await self.create_order(symbol, 'market', side, 0, None, params)
 
     async def create_market_buy_order_with_cost(self, symbol: str, cost: float, params={}) -> Order:
         """
@@ -2514,7 +2588,7 @@ class whitebit(Exchange, ImplicitAPI):
         return self.in_array(currency, fiatCurrencies)
 
     def nonce(self):
-        return self.milliseconds()
+        return self.milliseconds() - self.options['timeDifference']
 
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):
         query = self.omit(params, self.extract_params(path))
@@ -2527,10 +2601,12 @@ class whitebit(Exchange, ImplicitAPI):
                 url += '?' + self.urlencode(query)
         if accessibility == 'private':
             self.check_required_credentials()
-            nonce = str(self.nonce())
+            nonce = self.nonce()
+            timestamp = self.parse_to_int(nonce / 1000)
+            timestampString = str(timestamp)
             secret = self.encode(self.secret)
             request = '/' + 'api' + '/' + version + pathWithParams
-            body = self.json(self.extend({'request': request, 'nonce': nonce}, params))
+            body = self.json(self.extend({'request': request, 'nonce': timestampString}, params))
             payload = self.string_to_base64(body)
             signature = self.hmac(self.encode(payload), secret, hashlib.sha512)
             headers = {
@@ -2550,12 +2626,13 @@ class whitebit(Exchange, ImplicitAPI):
             # For cases where we have a meaningful status
             # {"response":null,"status":422,"errors":{"orderId":["Finished order id 435453454535 not found on your account"]},"notification":null,"warning":"Finished order id 435453454535 not found on your account","_token":null}
             status = self.safe_string(response, 'status')
+            errors = self.safe_value(response, 'errors')
             # {"code":10,"message":"Unauthorized request."}
             message = self.safe_string(response, 'message')
             # For these cases where we have a generic code variable error key
             # {"code":0,"message":"Validation failed","errors":{"amount":["Amount must be greater than 0"]}}
             codeNew = self.safe_integer(response, 'code')
-            hasErrorStatus = status is not None and status != '200'
+            hasErrorStatus = status is not None and status != '200' and errors is not None
             if hasErrorStatus or codeNew is not None:
                 feedback = self.id + ' ' + body
                 errorInfo = message

@@ -259,6 +259,8 @@ class whitebit extends whitebit$1 {
                 },
             },
             'options': {
+                'timeDifference': 0,
+                'adjustForTimeDifference': false,
                 'fiatCurrencies': ['EUR', 'USD', 'RUB', 'UAH'],
                 'fetchBalance': {
                     'account': 'spot',
@@ -275,6 +277,78 @@ class whitebit extends whitebit$1 {
                 },
                 'defaultType': 'spot',
                 'brokerId': 'ccxt',
+            },
+            'features': {
+                'default': {
+                    'sandbox': false,
+                    'createOrder': {
+                        'marginMode': true,
+                        'triggerPrice': true,
+                        'triggerDirection': false,
+                        'triggerPriceType': undefined,
+                        'stopLossPrice': false,
+                        'takeProfitPrice': false,
+                        'attachedStopLossTakeProfit': undefined,
+                        'timeInForce': {
+                            'IOC': true,
+                            'FOK': false,
+                            'PO': true,
+                            'GTD': false,
+                        },
+                        'hedged': false,
+                        'trailing': false,
+                        'leverage': false,
+                        'marketBuyByCost': true,
+                        'marketBuyRequiresPrice': false,
+                        'selfTradePrevention': false,
+                        'iceberg': false,
+                    },
+                    'createOrders': undefined,
+                    'fetchMyTrades': {
+                        'marginMode': false,
+                        'limit': 100,
+                        'daysBack': undefined,
+                        'untilDays': undefined,
+                        'symbolRequired': false,
+                    },
+                    'fetchOrder': undefined,
+                    'fetchOpenOrders': {
+                        'marginMode': false,
+                        'limit': 100,
+                        'trigger': false,
+                        'trailing': false,
+                        'symbolRequired': false,
+                    },
+                    'fetchOrders': undefined,
+                    'fetchClosedOrders': {
+                        'marginMode': false,
+                        'limit': 100,
+                        'daysBack': undefined,
+                        'daysBackCanceled': undefined,
+                        'untilDays': undefined,
+                        'trigger': false,
+                        'trailing': false,
+                        'symbolRequired': false,
+                    },
+                    'fetchOHLCV': {
+                        'limit': 1440,
+                    },
+                },
+                'spot': {
+                    'extends': 'default',
+                },
+                'swap': {
+                    'linear': {
+                        'extends': 'default',
+                    },
+                    'inverse': {
+                        'extends': 'default',
+                    },
+                },
+                'future': {
+                    'linear': undefined,
+                    'inverse': undefined,
+                },
             },
             'precisionMode': number.TICK_SIZE,
             'exceptions': {
@@ -315,6 +389,9 @@ class whitebit extends whitebit$1 {
      * @returns {object[]} an array of objects representing market data
      */
     async fetchMarkets(params = {}) {
+        if (this.options['adjustForTimeDifference']) {
+            await this.loadTimeDifference();
+        }
         const markets = await this.v4PublicGetMarkets();
         //
         //    [
@@ -1239,7 +1316,7 @@ class whitebit extends whitebit$1 {
         const response = await this.v4PublicGetTime(params);
         //
         //     {
-        //         "time":1635467280514
+        //         "time":1737380046
         //     }
         //
         return this.safeInteger(response, 'time');
@@ -1255,11 +1332,9 @@ class whitebit extends whitebit$1 {
      * @returns {object} an [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
      */
     async createMarketOrderWithCost(symbol, side, cost, params = {}) {
-        const req = {
-            'cost': cost,
-        };
+        params['cost'] = cost;
         // only buy side is supported
-        return await this.createOrder(symbol, 'market', side, 0, undefined, this.extend(req, params));
+        return await this.createOrder(symbol, 'market', side, 0, undefined, params);
     }
     /**
      * @method
@@ -2608,7 +2683,7 @@ class whitebit extends whitebit$1 {
         return this.inArray(currency, fiatCurrencies);
     }
     nonce() {
-        return this.milliseconds();
+        return this.milliseconds() - this.options['timeDifference'];
     }
     sign(path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
         const query = this.omit(params, this.extractParams(path));
@@ -2623,10 +2698,12 @@ class whitebit extends whitebit$1 {
         }
         if (accessibility === 'private') {
             this.checkRequiredCredentials();
-            const nonce = this.nonce().toString();
+            const nonce = this.nonce();
+            const timestamp = this.parseToInt(nonce / 1000);
+            const timestampString = timestamp.toString();
             const secret = this.encode(this.secret);
             const request = '/' + 'api' + '/' + version + pathWithParams;
-            body = this.json(this.extend({ 'request': request, 'nonce': nonce }, params));
+            body = this.json(this.extend({ 'request': request, 'nonce': timestampString }, params));
             const payload = this.stringToBase64(body);
             const signature = this.hmac(this.encode(payload), secret, sha512.sha512);
             headers = {
@@ -2649,12 +2726,13 @@ class whitebit extends whitebit$1 {
             // For cases where we have a meaningful status
             // {"response":null,"status":422,"errors":{"orderId":["Finished order id 435453454535 not found on your account"]},"notification":null,"warning":"Finished order id 435453454535 not found on your account","_token":null}
             const status = this.safeString(response, 'status');
+            const errors$1 = this.safeValue(response, 'errors');
             // {"code":10,"message":"Unauthorized request."}
             const message = this.safeString(response, 'message');
             // For these cases where we have a generic code variable error key
             // {"code":0,"message":"Validation failed","errors":{"amount":["Amount must be greater than 0"]}}
             const codeNew = this.safeInteger(response, 'code');
-            const hasErrorStatus = status !== undefined && status !== '200';
+            const hasErrorStatus = status !== undefined && status !== '200' && errors$1 !== undefined;
             if (hasErrorStatus || codeNew !== undefined) {
                 const feedback = this.id + ' ' + body;
                 let errorInfo = message;

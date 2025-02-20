@@ -14,7 +14,7 @@ import type { Balances, Currency, Dict, Int, Market, Num, OHLCV, Order, OrderBoo
  * @augments Exchange
  */
 export default class bitbank extends Exchange {
-    describe () {
+    describe (): any {
         return this.deepExtend (super.describe (), {
             'id': 'bitbank',
             'name': 'bitbank',
@@ -179,17 +179,20 @@ export default class bitbank extends Exchange {
                         'limit': 1000,
                         'daysBack': undefined,
                         'untilDays': undefined,
+                        'symbolRequired': false,
                     },
                     'fetchOrder': {
                         'marginMode': false,
                         'trigger': false,
                         'trailing': false,
+                        'symbolRequired': false,
                     },
                     'fetchOpenOrders': {
                         'marginMode': false,
                         'limit': 1000,
                         'trigger': false,
                         'trailing': false,
+                        'symbolRequired': false,
                     },
                     'fetchOrders': undefined,
                     'fetchClosedOrders': undefined,

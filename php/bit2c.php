@@ -10,7 +10,7 @@ use ccxt\abstract\bit2c as Exchange;
 
 class bit2c extends Exchange {
 
-    public function describe() {
+    public function describe(): mixed {
         return $this->deep_extend(parent::describe(), array(
             'id' => 'bit2c',
             'name' => 'Bit2C',
@@ -198,17 +198,20 @@ class bit2c extends Exchange {
                         'limit' => 100,
                         'daysBack' => 30,
                         'untilDays' => 30,
+                        'symbolRequired' => false,
                     ),
                     'fetchOrder' => array(
                         'marginMode' => false,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => false,
                     ),
                     'fetchOpenOrders' => array(
                         'marginMode' => false,
                         'limit' => null,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => true,
                     ),
                     'fetchOrders' => null,
                     'fetchClosedOrders' => null, // todo implement
@@ -638,7 +641,6 @@ class bit2c extends Exchange {
         // 0 = New
         // 1 = Open
         // 5 = Completed
-        $status = null;
         if ($isNewOrder) {
             $tempStatus = $this->safe_integer($orderUnified, 'status_type');
             if ($tempStatus === 0 || $tempStatus === 1) {
@@ -816,13 +818,10 @@ class bit2c extends Exchange {
         //         "isMaker" => True,
         //     }
         //
-        $timestamp = null;
-        $id = null;
         $price = null;
         $amount = null;
         $orderId = null;
         $fee = null;
-        $side = null;
         $makerOrTaker = null;
         $reference = $this->safe_string($trade, 'reference');
         if ($reference !== null) {
@@ -838,10 +837,10 @@ class bit2c extends Exchange {
             $isMaker = $this->safe_value($trade, 'isMaker');
             $makerOrTaker = $isMaker ? 'maker' : 'taker';
             $orderId = $isMaker ? $reference_parts[2] : $reference_parts[1];
-            $side = $this->safe_integer($trade, 'action');
-            if ($side === 0) {
+            $action = $this->safe_integer($trade, 'action');
+            if ($action === 0) {
                 $side = 'buy';
-            } elseif ($side === 1) {
+            } else {
                 $side = 'sell';
             }
             $feeCost = $this->safe_string($trade, 'feeAmount');

@@ -5,7 +5,7 @@
 
 from ccxt.base.exchange import Exchange
 from ccxt.abstract.alpaca import ImplicitAPI
-from ccxt.base.types import Balances, Currency, DepositAddress, Int, Market, Num, Order, OrderBook, OrderSide, OrderType, Str, Strings, Ticker, Tickers, Trade, Transaction
+from ccxt.base.types import Any, Balances, Currency, DepositAddress, Int, Market, Num, Order, OrderBook, OrderSide, OrderType, Str, Strings, Ticker, Tickers, Trade, Transaction
 from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import PermissionDenied
@@ -22,7 +22,7 @@ from ccxt.base.precise import Precise
 
 class alpaca(Exchange, ImplicitAPI):
 
-    def describe(self):
+    def describe(self) -> Any:
         return self.deep_extend(super(alpaca, self).describe(), {
             'id': 'alpaca',
             'name': 'Alpaca',
@@ -60,6 +60,9 @@ class alpaca(Exchange, ImplicitAPI):
                 'cancelOrder': True,
                 'closeAllPositions': False,
                 'closePosition': False,
+                'createMarketBuyOrder': True,
+                'createMarketBuyOrderWithCost': True,
+                'createMarketOrderWithCost': True,
                 'createOrder': True,
                 'createStopOrder': True,
                 'createTriggerOrder': True,
@@ -312,17 +315,20 @@ class alpaca(Exchange, ImplicitAPI):
                         'limit': 100,
                         'daysBack': 100000,
                         'untilDays': 100000,
+                        'symbolRequired': False,
                     },
                     'fetchOrder': {
                         'marginMode': False,
                         'trigger': False,
                         'trailing': False,
+                        'symbolRequired': False,
                     },
                     'fetchOpenOrders': {
                         'marginMode': False,
                         'limit': 500,
                         'trigger': False,
                         'trailing': False,
+                        'symbolRequired': False,
                     },
                     'fetchOrders': {
                         'marginMode': False,
@@ -331,6 +337,7 @@ class alpaca(Exchange, ImplicitAPI):
                         'untilDays': 100000,
                         'trigger': False,
                         'trailing': False,
+                        'symbolRequired': False,
                     },
                     'fetchClosedOrders': {
                         'marginMode': False,
@@ -340,6 +347,7 @@ class alpaca(Exchange, ImplicitAPI):
                         'untilDays': 100000,
                         'trigger': False,
                         'trailing': False,
+                        'symbolRequired': False,
                     },
                     'fetchOHLCV': {
                         'limit': 1000,
@@ -370,7 +378,7 @@ class alpaca(Exchange, ImplicitAPI):
             },
         })
 
-    def fetch_time(self, params={}):
+    def fetch_time(self, params={}) -> Int:
         """
         fetches the current integer timestamp in milliseconds from the exchange server
         :param dict [params]: extra parameters specific to the exchange API endpoint
@@ -442,7 +450,7 @@ class alpaca(Exchange, ImplicitAPI):
         #         "status": "active",
         #         "tradable": True,
         #         "marginable": False,
-        #         "maintenance_margin_requirement": 100,
+        #         "maintenance_margin_requirement": 101,
         #         "shortable": False,
         #         "easy_to_borrow": False,
         #         "fractionable": True,
@@ -905,6 +913,58 @@ class alpaca(Exchange, ImplicitAPI):
         clientOrderId = self.safe_string(params, 'clientOrderId', defaultClientId)
         return clientOrderId
 
+    def create_market_order_with_cost(self, symbol: str, side: OrderSide, cost: float, params={}):
+        """
+        create a market order by providing the symbol, side and cost
+
+        https://docs.alpaca.markets/reference/postorder
+
+        :param str symbol: unified symbol of the market to create an order in
+        :param str side: 'buy' or 'sell'
+        :param float cost: how much you want to trade in units of the quote currency
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns dict: an `order structure <https://docs.ccxt.com/#/?id=order-structure>`
+        """
+        self.load_markets()
+        req = {
+            'cost': cost,
+        }
+        return self.create_order(symbol, 'market', side, 0, None, self.extend(req, params))
+
+    def create_market_buy_order_with_cost(self, symbol: str, cost: float, params={}):
+        """
+        create a market buy order by providing the symbol and cost
+
+        https://docs.alpaca.markets/reference/postorder
+
+        :param str symbol: unified symbol of the market to create an order in
+        :param float cost: how much you want to trade in units of the quote currency
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns dict: an `order structure <https://docs.ccxt.com/#/?id=order-structure>`
+        """
+        self.load_markets()
+        req = {
+            'cost': cost,
+        }
+        return self.create_order(symbol, 'market', 'buy', 0, None, self.extend(req, params))
+
+    def create_market_sell_order_with_cost(self, symbol: str, cost: float, params={}):
+        """
+        create a market sell order by providing the symbol and cost
+
+        https://docs.alpaca.markets/reference/postorder
+
+        :param str symbol: unified symbol of the market to create an order in
+        :param float cost: how much you want to trade in units of the quote currency
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns dict: an `order structure <https://docs.ccxt.com/#/?id=order-structure>`
+        """
+        self.load_markets()
+        req = {
+            'cost': cost,
+        }
+        return self.create_order(symbol, 'market', 'sell', cost, None, self.extend(req, params))
+
     def create_order(self, symbol: str, type: OrderType, side: OrderSide, amount: float, price: Num = None, params={}):
         """
         create a trade order
@@ -918,6 +978,7 @@ class alpaca(Exchange, ImplicitAPI):
         :param float [price]: the price at which the order is to be fulfilled, in units of the quote currency, ignored in market orders
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :param float [params.triggerPrice]: The price at which a trigger order is triggered at
+        :param float [params.cost]: *market orders only* the cost of the order in units of the quote currency
         :returns dict: an `order structure <https://docs.ccxt.com/#/?id=order-structure>`
         """
         self.load_markets()
@@ -925,13 +986,12 @@ class alpaca(Exchange, ImplicitAPI):
         id = market['id']
         request: dict = {
             'symbol': id,
-            'qty': self.amount_to_precision(symbol, amount),
             'side': side,
             'type': type,  # market, limit, stop_limit
         }
         triggerPrice = self.safe_string_n(params, ['triggerPrice', 'stop_price'])
         if triggerPrice is not None:
-            newType = None
+            newType: str
             if type.find('limit') >= 0:
                 newType = 'stop_limit'
             else:
@@ -940,6 +1000,12 @@ class alpaca(Exchange, ImplicitAPI):
             request['type'] = newType
         if type.find('limit') >= 0:
             request['limit_price'] = self.price_to_precision(symbol, price)
+        cost = self.safe_string(params, 'cost')
+        if cost is not None:
+            params = self.omit(params, 'cost')
+            request['notional'] = self.cost_to_precision(symbol, cost)
+        else:
+            request['qty'] = self.amount_to_precision(symbol, amount)
         defaultTIF = self.safe_string(self.options, 'defaultTimeInForce')
         request['time_in_force'] = self.safe_string(params, 'timeInForce', defaultTIF)
         params = self.omit(params, ['timeInForce', 'triggerPrice'])
@@ -1072,9 +1138,9 @@ class alpaca(Exchange, ImplicitAPI):
         until = self.safe_integer(params, 'until')
         if until is not None:
             params = self.omit(params, 'until')
-            request['endTime'] = until
+            request['endTime'] = self.iso8601(until)
         if since is not None:
-            request['after'] = since
+            request['after'] = self.iso8601(since)
         if limit is not None:
             request['limit'] = limit
         response = self.traderPrivateGetV2Orders(self.extend(request, params))
@@ -1308,6 +1374,7 @@ class alpaca(Exchange, ImplicitAPI):
         :param int [limit]: the maximum number of trade structures to retrieve
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :param int [params.until]: the latest time in ms to fetch trades for
+        :param str [params.page_token]: page_token - used for paging
         :returns Trade[]: a list of `trade structures <https://docs.ccxt.com/#/?id=trade-structure>`
         """
         self.load_markets()
@@ -1317,8 +1384,12 @@ class alpaca(Exchange, ImplicitAPI):
         }
         if symbol is not None:
             market = self.market(symbol)
+        until = self.safe_integer(params, 'until')
+        if until is not None:
+            params = self.omit(params, 'until')
+            request['until'] = self.iso8601(until)
         if since is not None:
-            request['after'] = since
+            request['after'] = self.iso8601(since)
         if limit is not None:
             request['page_size'] = limit
         request, params = self.handle_until_option('until', request, params)

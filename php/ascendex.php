@@ -10,7 +10,7 @@ use ccxt\abstract\ascendex as Exchange;
 
 class ascendex extends Exchange {
 
-    public function describe() {
+    public function describe(): mixed {
         return $this->deep_extend(parent::describe(), array(
             'id' => 'ascendex',
             'name' => 'AscendEX',
@@ -280,7 +280,6 @@ class ascendex extends Exchange {
                     'AVAX' => 'avalanche C chain',
                     'OMNI' => 'Omni',
                     // 'TRC' => 'TRC20',
-                    'TRX' => 'TRC20',
                     'TRC20' => 'TRC20',
                     'ERC20' => 'ERC20',
                     'GO20' => 'GO20',
@@ -326,6 +325,7 @@ class ascendex extends Exchange {
                         'trigger' => false,
                         'trailing' => false,
                         'marketType' => true,
+                        'symbolRequired' => false,
                     ),
                     'fetchOpenOrders' => array(
                         'marginMode' => false,
@@ -333,6 +333,7 @@ class ascendex extends Exchange {
                         'trigger' => false,
                         'trailing' => false,
                         'marketType' => true,
+                        'symbolRequired' => false,
                     ),
                     'fetchOrders' => null,
                     'fetchClosedOrders' => null,
@@ -350,6 +351,7 @@ class ascendex extends Exchange {
                         'untilDays' => 100000,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => false,
                     ),
                 ),
                 'forDerivatives' => array(
@@ -373,6 +375,7 @@ class ascendex extends Exchange {
                         'untilDays' => null,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => false,
                     ),
                 ),
                 'swap' => array(
@@ -774,7 +777,7 @@ class ascendex extends Exchange {
         return $result;
     }
 
-    public function fetch_time($params = array ()) {
+    public function fetch_time($params = array ()): ?int {
         /**
          * fetches the current integer timestamp in milliseconds from the ascendex server
          * @param {array} [$params] extra parameters specific to the exchange API endpoint

@@ -6,7 +6,7 @@
 import ccxt.async_support
 from ccxt.async_support.base.ws.cache import ArrayCache, ArrayCacheBySymbolById
 import hashlib
-from ccxt.base.types import Balances, Int, Order, OrderBook, Str, Strings, Ticker, Tickers, Trade
+from ccxt.base.types import Any, Balances, Int, Order, OrderBook, Str, Strings, Ticker, Tickers, Trade
 from ccxt.async_support.base.ws.client import Client
 from typing import List
 from ccxt.base.errors import ExchangeError
@@ -20,7 +20,7 @@ from ccxt.base.errors import RequestTimeout
 
 class coinex(ccxt.async_support.coinex):
 
-    def describe(self):
+    def describe(self) -> Any:
         return self.deep_extend(super(coinex, self).describe(), {
             'has': {
                 'ws': True,
@@ -263,7 +263,10 @@ class coinex(ccxt.async_support.coinex):
         type, params = self.handle_market_type_and_params('watchBalance', None, params, 'spot')
         await self.authenticate(type)
         url = self.urls['api']['ws'][type]
-        currencies = list(self.currencies_by_id.keys())
+        # coinex throws a closes the websocket when subscribing over 1422 currencies, therefore we filter out inactive currencies
+        activeCurrencies = self.filter_by(self.currencies_by_id, 'active', True)
+        activeCurrenciesById = self.index_by(activeCurrencies, 'id')
+        currencies = list(activeCurrenciesById.keys())
         if currencies is None:
             currencies = []
         messageHash = 'balances'

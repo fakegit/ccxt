@@ -7,7 +7,7 @@ from ccxt.base.exchange import Exchange
 from ccxt.abstract.bitget import ImplicitAPI
 import hashlib
 import json
-from ccxt.base.types import Balances, BorrowInterest, Conversion, CrossBorrowRate, Currencies, Currency, DepositAddress, FundingHistory, Int, IsolatedBorrowRate, LedgerEntry, Leverage, LeverageTier, Liquidation, LongShortRatio, MarginMode, MarginModification, Market, Num, Order, OrderBook, OrderRequest, OrderSide, OrderType, Position, Str, Strings, Ticker, Tickers, FundingRate, FundingRates, Trade, TradingFeeInterface, TradingFees, Transaction, TransferEntry
+from ccxt.base.types import Any, Balances, BorrowInterest, Conversion, CrossBorrowRate, Currencies, Currency, DepositAddress, FundingHistory, Int, IsolatedBorrowRate, LedgerEntry, Leverage, LeverageTier, Liquidation, LongShortRatio, MarginMode, MarginModification, Market, Num, Order, OrderBook, OrderRequest, OrderSide, OrderType, Position, Str, Strings, Ticker, Tickers, FundingRate, FundingRates, Trade, TradingFeeInterface, TradingFees, Transaction, TransferEntry
 from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
@@ -34,7 +34,7 @@ from ccxt.base.precise import Precise
 
 class bitget(Exchange, ImplicitAPI):
 
-    def describe(self):
+    def describe(self) -> Any:
         return self.deep_extend(super(bitget, self).describe(), {
             'id': 'bitget',
             'name': 'Bitget',
@@ -1402,18 +1402,18 @@ class bitget(Exchange, ImplicitAPI):
                         '1m': 30,
                         '3m': 30,
                         '5m': 30,
-                        '10m': 52,
+                        '10m': 30,
                         '15m': 52,
-                        '30m': 52,
+                        '30m': 62,
                         '1h': 83,
                         '2h': 120,
                         '4h': 240,
                         '6h': 360,
                         '12h': 360,
-                        '1d': 360,
-                        '3d': 1000,
-                        '1w': 1000,
-                        '1M': 1000,
+                        '1d': 300,
+                        '3d': 300,
+                        '1w': 300,
+                        '1M': 300,
                     },
                 },
                 'fetchTrades': {
@@ -1594,17 +1594,20 @@ class bitget(Exchange, ImplicitAPI):
                         'limit': 100,
                         'daysBack': None,
                         'untilDays': 90,
+                        'symbolRequired': True,
                     },
                     'fetchOrder': {
                         'marginMode': False,
                         'trigger': False,
                         'trailing': False,
+                        'symbolRequired': True,
                     },
                     'fetchOpenOrders': {
                         'marginMode': True,
                         'limit': 100,
                         'trigger': True,
                         'trailing': False,
+                        'symbolRequired': False,
                     },
                     'fetchOrders': None,
                     'fetchClosedOrders': {
@@ -1615,6 +1618,7 @@ class bitget(Exchange, ImplicitAPI):
                         'untilDays': 90,
                         'trigger': True,
                         'trailing': False,
+                        'symbolRequired': False,
                     },
                     'fetchOHLCV': {
                         'limit': 1000,  # variable timespans for recent endpoint, 200 for historical
@@ -1744,7 +1748,7 @@ class bitget(Exchange, ImplicitAPI):
         params = self.omit(params, 'productType')
         return [productType, params]
 
-    def fetch_time(self, params={}):
+    def fetch_time(self, params={}) -> Int:
         """
         fetches the current integer timestamp in milliseconds from the exchange server
 
@@ -1949,10 +1953,10 @@ class bitget(Exchange, ImplicitAPI):
             amountDecimals = self.safe_integer(market, 'volumePlace')
             priceStep = self.safe_string(market, 'priceEndStep')
             amountStep = self.safe_string(market, 'minTradeNum')
-            precisePrice = Precise(priceStep)
-            precisePrice.decimals = max(precisePrice.decimals, priceDecimals)
-            precisePrice.reduce()
-            priceString = str(precisePrice)
+            precise = Precise(priceStep)
+            precise.decimals = max(precise.decimals, priceDecimals)
+            precise.reduce()
+            priceString = str(precise)
             pricePrecision = self.parse_number(priceString)
             preciseAmount = Precise(amountStep)
             preciseAmount.decimals = max(preciseAmount.decimals, amountDecimals)
@@ -3463,6 +3467,7 @@ class bitget(Exchange, ImplicitAPI):
         :param int [limit]: the maximum amount of candles to fetch
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :param int [params.until]: timestamp in ms of the latest candle to fetch
+        :param boolean [params.useHistoryEndpoint]: whether to force to use historical endpoint(it has max limit of 200)
         :param boolean [params.paginate]: default False, when True will automatically paginate by calling self endpoint multiple times. See in the docs all the [available parameters](https://github.com/ccxt/ccxt/wiki/Manual#pagination-params)
         :param str [params.price]: *swap only* "mark"(to fetch mark price candles) or "index"(to fetch index price candles)
         :returns int[][]: A list of candles ordered, open, high, low, close, volume
@@ -3474,8 +3479,9 @@ class bitget(Exchange, ImplicitAPI):
         paginate = False
         paginate, params = self.handle_option_and_params(params, 'fetchOHLCV', 'paginate')
         if paginate:
-            return self.fetch_paginated_call_deterministic('fetchOHLCV', symbol, since, limit, timeframe, params, maxLimitForHistoryEndpoint)
+            return self.fetch_paginated_call_deterministic('fetchOHLCV', symbol, since, limit, timeframe, params, maxLimitForRecentEndpoint)
         sandboxMode = self.safe_bool(self.options, 'sandboxMode', False)
+        useHistoryEndpoint = self.safe_bool(params, 'useHistoryEndpoint', False)
         market = None
         if sandboxMode:
             sandboxSymbol = self.convert_symbol_for_sandbox(symbol)
@@ -3503,7 +3509,7 @@ class bitget(Exchange, ImplicitAPI):
         ohlcOptions = self.safe_dict(self.options, 'fetchOHLCV', {})
         retrievableDaysMap = self.safe_dict(ohlcOptions, 'maxDaysPerTimeframe', {})
         maxRetrievableDaysForRecent = self.safe_integer(retrievableDaysMap, timeframe, 30)  # default to safe minimum
-        endpointTsBoundary = now - maxRetrievableDaysForRecent * msInDay
+        endpointTsBoundary = now - (maxRetrievableDaysForRecent - 1) * msInDay
         if limitDefined:
             limit = min(limit, maxLimitForRecentEndpoint)
             request['limit'] = limit
@@ -3534,7 +3540,7 @@ class bitget(Exchange, ImplicitAPI):
         # make request
         if market['spot']:
             # checks if we need history endpoint
-            if historicalEndpointNeeded:
+            if historicalEndpointNeeded or useHistoryEndpoint:
                 response = self.publicSpotGetV2SpotMarketHistoryCandles(self.extend(request, params))
             else:
                 response = self.publicSpotGetV2SpotMarketCandles(self.extend(request, params))
@@ -3558,7 +3564,7 @@ class bitget(Exchange, ImplicitAPI):
             elif priceType == 'index':
                 response = self.publicMixGetV2MixMarketHistoryIndexCandles(extended)
             else:
-                if historicalEndpointNeeded:
+                if historicalEndpointNeeded or useHistoryEndpoint:
                     response = self.publicMixGetV2MixMarketHistoryCandles(extended)
                 else:
                     response = self.publicMixGetV2MixMarketCandles(extended)
@@ -4192,8 +4198,10 @@ class bitget(Exchange, ImplicitAPI):
         market = self.market(symbol)
         if not market['spot']:
             raise NotSupported(self.id + ' createMarketBuyOrderWithCost() supports spot orders only')
-        params['createMarketBuyOrderRequiresPrice'] = False
-        return self.create_order(symbol, 'market', 'buy', cost, None, params)
+        req = {
+            'createMarketBuyOrderRequiresPrice': False,
+        }
+        return self.create_order(symbol, 'market', 'buy', cost, None, self.extend(req, params))
 
     def create_order(self, symbol: str, type: OrderType, side: OrderSide, amount: float, price: Num = None, params={}):
         """
@@ -4624,7 +4632,7 @@ class bitget(Exchange, ImplicitAPI):
         response = None
         if market['spot']:
             if triggerPrice is None:
-                raise NotSupported(self.id + 'editOrder() only supports plan/trigger spot orders')
+                raise NotSupported(self.id + ' editOrder() only supports plan/trigger spot orders')
             editMarketBuyOrderRequiresPrice = self.safe_bool(self.options, 'editMarketBuyOrderRequiresPrice', True)
             if editMarketBuyOrderRequiresPrice and isMarketOrder and (side == 'buy'):
                 if price is None:
@@ -8846,4 +8854,10 @@ class bitget(Exchange, ImplicitAPI):
             }
             if method == 'POST':
                 headers['Content-Type'] = 'application/json'
+        sandboxMode = self.safe_bool(self.options, 'sandboxMode', False)
+        if sandboxMode and (path != 'v2/public/time'):
+            # https://github.com/ccxt/ccxt/issues/25252#issuecomment-2662742336
+            if headers is None:
+                headers = {}
+            headers['PAPTRADING'] = '1'
         return {'url': url, 'method': method, 'body': body, 'headers': headers}

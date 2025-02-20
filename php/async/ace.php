@@ -9,12 +9,12 @@ use Exception; // a common import
 use ccxt\async\abstract\ace as Exchange;
 use ccxt\ArgumentsRequired;
 use ccxt\Precise;
-use React\Async;
-use React\Promise\PromiseInterface;
+use \React\Async;
+use \React\Promise\PromiseInterface;
 
 class ace extends Exchange {
 
-    public function describe() {
+    public function describe(): mixed {
         return $this->deep_extend(parent::describe(), array(
             'id' => 'ace',
             'name' => 'ACE',
@@ -181,17 +181,20 @@ class ace extends Exchange {
                         'limit' => 500,
                         'daysBack' => null,
                         'untilDays' => null,
+                        'symbolRequired' => true,
                     ),
                     'fetchOrder' => array(
                         'marginMode' => false,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => false,
                     ),
                     'fetchOpenOrders' => array(
                         'marginMode' => false,
                         'limit' => null,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => false,
                     ),
                     'fetchOrders' => null,
                     'fetchClosedOrders' => null,
@@ -491,7 +494,7 @@ class ace extends Exchange {
             //     }
             //
             $orderBook = $this->safe_dict($response, 'attachment');
-            return $this->parse_order_book($orderBook, $market['symbol'], null, 'bids', 'asks');
+            return $this->parse_order_book($orderBook, $market['symbol'], null, 'bids', 'asks', 1, 0);
         }) ();
     }
 

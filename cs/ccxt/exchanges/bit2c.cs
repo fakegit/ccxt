@@ -175,17 +175,20 @@ public partial class bit2c : Exchange
                         { "limit", 100 },
                         { "daysBack", 30 },
                         { "untilDays", 30 },
+                        { "symbolRequired", false },
                     } },
                     { "fetchOrder", new Dictionary<string, object>() {
                         { "marginMode", false },
                         { "trigger", false },
                         { "trailing", false },
+                        { "symbolRequired", false },
                     } },
                     { "fetchOpenOrders", new Dictionary<string, object>() {
                         { "marginMode", false },
                         { "limit", null },
                         { "trigger", false },
                         { "trailing", false },
+                        { "symbolRequired", true },
                     } },
                     { "fetchOrders", null },
                     { "fetchClosedOrders", null },
@@ -868,11 +871,11 @@ public partial class bit2c : Exchange
             object isMaker = this.safeValue(trade, "isMaker");
             makerOrTaker = ((bool) isTrue(isMaker)) ? "maker" : "taker";
             orderId = ((bool) isTrue(isMaker)) ? getValue(reference_parts, 2) : getValue(reference_parts, 1);
-            side = this.safeInteger(trade, "action");
-            if (isTrue(isEqual(side, 0)))
+            object action = this.safeInteger(trade, "action");
+            if (isTrue(isEqual(action, 0)))
             {
                 side = "buy";
-            } else if (isTrue(isEqual(side, 1)))
+            } else
             {
                 side = "sell";
             }

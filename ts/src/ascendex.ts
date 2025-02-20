@@ -15,7 +15,7 @@ import type { TransferEntry, FundingHistory, Int, OHLCV, Order, OrderSide, Order
  * @augments Exchange
  */
 export default class ascendex extends Exchange {
-    describe () {
+    describe (): any {
         return this.deepExtend (super.describe (), {
             'id': 'ascendex',
             'name': 'AscendEX',
@@ -285,7 +285,6 @@ export default class ascendex extends Exchange {
                     'AVAX': 'avalanche C chain',
                     'OMNI': 'Omni',
                     // 'TRC': 'TRC20',
-                    'TRX': 'TRC20',
                     'TRC20': 'TRC20',
                     'ERC20': 'ERC20',
                     'GO20': 'GO20',
@@ -331,6 +330,7 @@ export default class ascendex extends Exchange {
                         'trigger': false,
                         'trailing': false,
                         'marketType': true,
+                        'symbolRequired': false,
                     },
                     'fetchOpenOrders': {
                         'marginMode': false,
@@ -338,6 +338,7 @@ export default class ascendex extends Exchange {
                         'trigger': false,
                         'trailing': false,
                         'marketType': true,
+                        'symbolRequired': false,
                     },
                     'fetchOrders': undefined,
                     'fetchClosedOrders': undefined,
@@ -355,6 +356,7 @@ export default class ascendex extends Exchange {
                         'untilDays': 100000,
                         'trigger': false,
                         'trailing': false,
+                        'symbolRequired': false,
                     },
                 },
                 'forDerivatives': {
@@ -378,6 +380,7 @@ export default class ascendex extends Exchange {
                         'untilDays': undefined,
                         'trigger': false,
                         'trailing': false,
+                        'symbolRequired': false,
                     },
                 },
                 'swap': {
@@ -790,7 +793,7 @@ export default class ascendex extends Exchange {
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {int} the current integer timestamp in milliseconds from the ascendex server
      */
-    async fetchTime (params = {}) {
+    async fetchTime (params = {}): Promise<Int> {
         const request: Dict = {
             'requestTime': this.milliseconds (),
         };

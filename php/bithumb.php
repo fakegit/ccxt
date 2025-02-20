@@ -10,7 +10,7 @@ use ccxt\abstract\bithumb as Exchange;
 
 class bithumb extends Exchange {
 
-    public function describe() {
+    public function describe(): mixed {
         return $this->deep_extend(parent::describe(), array(
             'id' => 'bithumb',
             'name' => 'Bithumb',
@@ -159,12 +159,14 @@ class bithumb extends Exchange {
                         'marginMode' => false,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => true,
                     ),
                     'fetchOpenOrders' => array(
                         'marginMode' => false,
                         'limit' => 1000,
                         'trigger' => false,
                         'trailing' => false,
+                        'symbolRequired' => true,
                     ),
                     'fetchOrders' => null,
                     'fetchClosedOrders' => null,

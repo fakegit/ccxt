@@ -15,7 +15,7 @@ import type { Balances, Currencies, Currency, Dict, Int, MarginModification, Mar
  * @augments Exchange
  */
 export default class bitrue extends Exchange {
-    describe () {
+    describe (): any {
         return this.deepExtend (super.describe (), {
             'id': 'bitrue',
             'name': 'Bitrue',
@@ -472,17 +472,20 @@ export default class bitrue extends Exchange {
                         'limit': 1000,
                         'daysBack': 100000,
                         'untilDays': 100000,
+                        'symbolRequired': true,
                     },
                     'fetchOrder': {
                         'marginMode': false,
                         'trigger': false,
                         'trailing': false,
+                        'symbolRequired': true,
                     },
                     'fetchOpenOrders': {
                         'marginMode': false,
                         'limit': undefined,
                         'trigger': false,
                         'trailing': false,
+                        'symbolRequired': true,
                     },
                     'fetchOrders': undefined,
                     'fetchClosedOrders': {
@@ -493,6 +496,7 @@ export default class bitrue extends Exchange {
                         'untilDays': 90,
                         'trigger': false,
                         'trailing': false,
+                        'symbolRequired': true,
                     },
                     'fetchOHLCV': {
                         'limit': 1440,
@@ -645,7 +649,7 @@ export default class bitrue extends Exchange {
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {int} the current integer timestamp in milliseconds from the exchange server
      */
-    async fetchTime (params = {}) {
+    async fetchTime (params = {}): Promise<Int> {
         const response = await this.spotV1PublicGetTime (params);
         //
         //     {

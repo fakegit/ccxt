@@ -14,7 +14,7 @@ import type { Balances, Dict, Int, Market, Num, OHLCV, Order, OrderBook, OrderSi
  * @augments Exchange
  */
 export default class ace extends Exchange {
-    describe () {
+    describe (): any {
         return this.deepExtend (super.describe (), {
             'id': 'ace',
             'name': 'ACE',
@@ -181,17 +181,20 @@ export default class ace extends Exchange {
                         'limit': 500,
                         'daysBack': undefined,
                         'untilDays': undefined,
+                        'symbolRequired': true,
                     },
                     'fetchOrder': {
                         'marginMode': false,
                         'trigger': false,
                         'trailing': false,
+                        'symbolRequired': false,
                     },
                     'fetchOpenOrders': {
                         'marginMode': false,
                         'limit': undefined,
                         'trigger': false,
                         'trailing': false,
+                        'symbolRequired': false,
                     },
                     'fetchOrders': undefined,
                     'fetchClosedOrders': undefined,
@@ -484,7 +487,7 @@ export default class ace extends Exchange {
         //     }
         //
         const orderBook = this.safeDict (response, 'attachment');
-        return this.parseOrderBook (orderBook, market['symbol'], undefined, 'bids', 'asks');
+        return this.parseOrderBook (orderBook, market['symbol'], undefined, 'bids', 'asks', 1, 0);
     }
 
     parseOHLCV (ohlcv, market: Market = undefined): OHLCV {

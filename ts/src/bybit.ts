@@ -16,7 +16,7 @@ import type { Int, OrderSide, OrderType, Trade, Order, OHLCV, FundingRateHistory
  * @augments Exchange
  */
 export default class bybit extends Exchange {
-    describe () {
+    describe (): any {
         return this.deepExtend (super.describe (), {
             'id': 'bybit',
             'name': 'Bybit',
@@ -239,6 +239,7 @@ export default class bybit extends Exchange {
                         'v5/spot-lever-token/reference': 5,
                         // spot margin trade
                         'v5/spot-margin-trade/data': 5,
+                        'v5/spot-margin-trade/collateral': 5,
                         'v5/spot-cross-margin-trade/data': 5,
                         'v5/spot-cross-margin-trade/pledge-token': 5,
                         'v5/spot-cross-margin-trade/borrow-token': 5,
@@ -1195,17 +1196,20 @@ export default class bybit extends Exchange {
                         'limit': 100,
                         'daysBack': 365 * 2, // 2 years
                         'untilDays': 7, // days between start-end
+                        'symbolRequired': false,
                     },
                     'fetchOrder': {
                         'marginMode': false,
                         'trigger': true,
                         'trailing': false,
+                        'symbolRequired': true,
                     },
                     'fetchOpenOrders': {
                         'marginMode': false,
                         'limit': 50,
                         'trigger': true,
                         'trailing': false,
+                        'symbolRequired': false,
                     },
                     'fetchOrders': undefined,
                     'fetchClosedOrders': {
@@ -1216,6 +1220,7 @@ export default class bybit extends Exchange {
                         'untilDays': 7,
                         'trigger': true,
                         'trailing': false,
+                        'symbolRequired': false,
                     },
                     'fetchOHLCV': {
                         'limit': 1000,
@@ -1414,8 +1419,8 @@ export default class bybit extends Exchange {
 
     createExpiredOptionMarket (symbol: string) {
         // support expired option contracts
-        const quote = 'USD';
-        const settle = 'USDC';
+        let quote = undefined;
+        let settle = undefined;
         const optionParts = symbol.split ('-');
         const symbolBase = symbol.split ('/');
         let base = undefined;
@@ -1423,9 +1428,21 @@ export default class bybit extends Exchange {
         if (symbol.indexOf ('/') > -1) {
             base = this.safeString (symbolBase, 0);
             expiry = this.safeString (optionParts, 1);
+            const symbolQuoteAndSettle = this.safeString (symbolBase, 1);
+            const splitQuote = symbolQuoteAndSettle.split (':');
+            const quoteAndSettle = this.safeString (splitQuote, 0);
+            quote = quoteAndSettle;
+            settle = quoteAndSettle;
         } else {
             base = this.safeString (optionParts, 0);
             expiry = this.convertMarketIdExpireDate (this.safeString (optionParts, 1));
+            if (symbol.endsWith ('-USDT')) {
+                quote = 'USDT';
+                settle = 'USDT';
+            } else {
+                quote = 'USDC';
+                settle = 'USDC';
+            }
         }
         const strike = this.safeString (optionParts, 2);
         const optionType = this.safeString (optionParts, 3);
@@ -1523,6 +1540,9 @@ export default class bybit extends Exchange {
     }
 
     getPrice (symbol: string, price: string) {
+        if (price === undefined) {
+            return price;
+        }
         const market = this.market (symbol);
         const emptyPrecisionPrice = (market['precision']['price'] === undefined);
         if (!emptyPrecisionPrice) {
@@ -1548,7 +1568,7 @@ export default class bybit extends Exchange {
      * @param {object} [params] extra parameters specific to the exchange API endpoint
      * @returns {int} the current integer timestamp in milliseconds from the exchange server
      */
-    async fetchTime (params = {}) {
+    async fetchTime (params = {}): Promise<Int> {
         const response = await this.publicGetV5MarketTime (params);
         //
         //    {
@@ -1744,7 +1764,7 @@ export default class bybit extends Exchange {
         return this.arrayConcat (spotMarkets, derivativeMarkets);
     }
 
-    async fetchSpotMarkets (params) {
+    async fetchSpotMarkets (params): Promise<Market[]> {
         const request: Dict = {
             'category': 'spot',
         };
@@ -1862,7 +1882,7 @@ export default class bybit extends Exchange {
         return result;
     }
 
-    async fetchFutureMarkets (params) {
+    async fetchFutureMarkets (params): Promise<Market[]> {
         params = this.extend (params);
         params['limit'] = 1000; // minimize number of requests
         let preLaunchMarkets = [] as any;
@@ -2057,7 +2077,7 @@ export default class bybit extends Exchange {
         return result;
     }
 
-    async fetchOptionMarkets (params) {
+    async fetchOptionMarkets (params): Promise<Market[]> {
         const request: Dict = {
             'category': 'option',
         };
@@ -3323,7 +3343,12 @@ export default class bybit extends Exchange {
                         if (free !== undefined) {
                             account['free'] = free;
                         } else {
-                            account['used'] = this.safeString (coinEntry, 'locked');
+                            const locked = this.safeString (coinEntry, 'locked', '0');
+                            const totalPositionIm = this.safeString (coinEntry, 'totalPositionIM', '0');
+                            const totalOrderIm = this.safeString (coinEntry, 'totalOrderIM', '0');
+                            let totalUsed = Precise.stringAdd (locked, totalPositionIm);
+                            totalUsed = Precise.stringAdd (totalUsed, totalOrderIm);
+                            account['used'] = totalUsed;
                         }
                         // account['used'] = this.safeString (coinEntry, 'locked');
                         const currencyId = this.safeString (coinEntry, 'coin');
@@ -3843,7 +3868,7 @@ export default class bybit extends Exchange {
      * @param {bool} [params.reduceOnly] true or false whether the order is reduce-only
      * @param {string} [params.positionIdx] *contracts only* 0 for one-way mode, 1 buy side of hedged mode, 2 sell side of hedged mode
      * @param {bool} [params.hedged] *contracts only* true for hedged mode, false for one way mode, default is false
-     * @param {boolean} [params.isLeverage] *unified spot only* false then spot trading true then margin trading
+     * @param {int} [params.isLeverage] *unified spot only* false then spot trading true then margin trading
      * @param {string} [params.tpslMode] *contract only* 'full' or 'partial'
      * @param {string} [params.mmp] *option only* market maker protection
      * @param {string} [params.triggerDirection] *contract only* the direction for trigger orders, 'above' or 'below'
@@ -4050,7 +4075,7 @@ export default class bybit extends Exchange {
                 } else if (price !== undefined) {
                     request['qty'] = this.getCost (symbol, Precise.stringMul (amountString, priceString));
                 } else {
-                    request['qty'] = this.getCost (symbol, this.numberToString (amount));
+                    request['qty'] = amountString;
                 }
             }
         } else {
@@ -4729,7 +4754,7 @@ export default class bybit extends Exchange {
 
     /**
      * @method
-     * @name bybit#fetchOrderClassic
+     * @name bybit#fetchOrder
      * @description  *classic accounts only/ spot not supported*  fetches information on an order made by the user *classic accounts only*
      * @see https://bybit-exchange.github.io/docs/v5/order/order-list
      * @param {string} id the order id
@@ -4852,7 +4877,7 @@ export default class bybit extends Exchange {
 
     /**
      * @method
-     * @name bybit#fetchOrders
+     * @name bybit#fetchOrdersClassic
      * @description fetches information on multiple orders made by the user *classic accounts only*
      * @see https://bybit-exchange.github.io/docs/v5/order/order-list
      * @param {string} symbol unified market symbol of the market orders were made in
@@ -6840,7 +6865,7 @@ export default class bybit extends Exchange {
      */
     async fetchOpenInterestHistory (symbol: string, timeframe = '1h', since: Int = undefined, limit: Int = undefined, params = {}) {
         if (timeframe === '1m') {
-            throw new BadRequest (this.id + 'fetchOpenInterestHistory cannot use the 1m timeframe');
+            throw new BadRequest (this.id + ' fetchOpenInterestHistory cannot use the 1m timeframe');
         }
         await this.loadMarkets ();
         const paginate = this.safeBool (params, 'paginate');
@@ -6870,10 +6895,13 @@ export default class bybit extends Exchange {
         //    }
         //
         const timestamp = this.safeInteger (interest, 'timestamp');
-        const value = this.safeNumber2 (interest, 'open_interest', 'openInterest');
+        const openInterest = this.safeNumber2 (interest, 'open_interest', 'openInterest');
+        // the openInterest is in the base asset for linear and quote asset for inverse
+        const amount = market['linear'] ? openInterest : undefined;
+        const value = market['inverse'] ? openInterest : undefined;
         return this.safeOpenInterest ({
             'symbol': market['symbol'],
-            'openInterestAmount': undefined,
+            'openInterestAmount': amount,
             'openInterestValue': value,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
@@ -9177,6 +9205,9 @@ export default class bybit extends Exchange {
                 feedback = this.id + ' private api uses /user/v3/private/query-api to check if you have a unified account. The API key of user id must own one of permissions: "Account Transfer", "Subaccount Transfer", "Withdrawal" ' + body;
             } else {
                 feedback = this.id + ' ' + body;
+            }
+            if (body.indexOf ('Withdraw address chain or destination tag are not equal')) {
+                feedback = feedback + '; You might also need to ensure the address is whitelisted';
             }
             this.throwBroadlyMatchedException (this.exceptions['broad'], body, feedback);
             this.throwExactlyMatchedException (this.exceptions['exact'], errorCode, feedback);
